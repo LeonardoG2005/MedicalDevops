@@ -8,9 +8,9 @@ const Fastify = require('fastify');
 const swagger = require('@fastify/swagger');
 const swaggerUi = require('@fastify/swagger-ui');
 
-const imagenesRoutes = require('./routes/imagenes.routes');
-const notasMedicasRoutes = require('./routes/notas-medicas.routes');
-const documentosGeneradosRoutes = require('./routes/documentos-generados.routes');
+const imagenesRoutes = require('./routes/images.routes');
+const notasMedicasRoutes = require('./routes/medical-notes.routes');
+const documentosGeneradosRoutes = require('./routes/generated-documents.routes');
 
 async function buildApp() {
   const app = Fastify({ logger: false });
@@ -23,7 +23,7 @@ async function buildApp() {
         version: '1.0.0',
         description: 'API académica para imágenes, notas médicas y documentos generados.',
       },
-      servers: [{ url: 'http://localhost:3000', description: 'Local development' }],
+      servers: [{url: '/', description: 'Current API server'}],
       tags: [
         { name: 'Health', description: 'Health checks' },
         { name: 'Imagenes', description: 'Gestión de imágenes' },
