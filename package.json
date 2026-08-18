@@ -1,12 +1,35 @@
 {
-  "name": "medicaldevops",
+  "name": "medical-documents-api",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Academic medical documents API with Fastify :)",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-concurrency=1",
+    "test:coverage": "c8 --reporter=text --reporter=lcov node --test --test-concurrency=1",
+    "test:coverage:test": "c8 --check-coverage --branches 60 --functions 60 --lines 60 --statements 60 --reporter=text node --test --test-concurrency=1",
+    "test:coverage:prod": "c8 --check-coverage --branches 85 --functions 85 --lines 85 --statements 85 --reporter=text node --test --test-concurrency=1"
   },
-  "keywords": [],
+  "keywords": [
+    "fastify",
+    "postgresql",
+    "medical",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.2.1",
+    "@fastify/swagger-ui": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "c8": "^10.1.2"
+  }
 }
