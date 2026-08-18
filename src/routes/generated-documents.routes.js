@@ -4,10 +4,12 @@ const {
   createDocumentoGenerado,
   updateDocumentoGenerado,
   deleteDocumentoGenerado,
+  queryDocumentosGenerados,
 } = require('../controllers/documentos-generados.controller');
 const {
   documentoGeneradoSchema,
   documentoGeneradoInputSchema,
+  documentoGeneradoQuerySchema,
   idParamSchema,
 } = require('../schemas/documentos-generados.schema');
 
@@ -86,6 +88,23 @@ async function documentosGeneradosRoutes(app) {
     }
     return reply.code(204).send();
   });
+
+  app.route({
+    method: 'QUERY',
+    url: '/documentos-generados',
+    schema: {
+      tags: ['DocumentosGenerados'],
+      body: documentoGeneradoQuerySchema,
+      response: {
+        200: { type: 'array', items: documentoGeneradoSchema },
+      },
+    },
+    handler: async (request) => {
+      return queryDocumentosGenerados(request.body || {});
+    },
+  });
 }
+
+  
 
 module.exports = documentosGeneradosRoutes;
