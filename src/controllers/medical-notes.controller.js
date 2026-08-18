@@ -39,8 +39,8 @@ async function queryNotasMedicas(filters = {}) {
   const values = [];
 
   if (paciente) {
-    clauses.push(`paciente = $${values.length + 1}`);
-    values.push(paciente);
+    clauses.push(`paciente ILIKE $${values.length + 1}`);
+    values.push(`%${paciente}%`);
   }
 
   if (fecha) {
