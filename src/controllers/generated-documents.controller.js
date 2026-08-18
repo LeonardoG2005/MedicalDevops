@@ -33,10 +33,55 @@ async function deleteDocumentoGenerado(id) {
   return result.rows[0] || null;
 }
 
+async function queryDocumentosGenerados(filters = {}) {
+  const {
+    nombre,
+    tipo,
+    fecha_generacion,
+    nota_medica_id,
+  } = filters;
+
+  const clauses = [];
+  const values = [];
+
+  if (nombre) {
+    clauses.push(`nombre ILIKE $${values.length + 1}`);
+    values.push(`%${nombre}%`);
+  }
+
+  if (tipo) {
+    clauses.push(`tipo = $${values.length + 1}`);
+    values.push(tipo);
+  }
+
+  if (fecha_generacion) {
+    clauses.push(`fecha_generacion = $${values.length + 1}`);
+    values.push(fecha_generacion);
+  }
+
+  if (nota_medica_id !== undefined) {
+    clauses.push(`nota_medica_id = $${values.length + 1}`);
+    values.push(nota_medica_id);
+  }
+
+  let sql = 'SELECT * FROM documentos_generados';
+
+  if (clauses.length > 0) {
+    sql += ` WHERE ${clauses.join(' AND ')}`;
+  }
+
+  sql += ' ORDER BY id ASC';
+
+  const result = await query(sql, values);
+
+  return result.rows;
+}
+
 module.exports = {
   listDocumentosGenerados,
   getDocumentoGeneradoById,
   createDocumentoGenerado,
   updateDocumentoGenerado,
   deleteDocumentoGenerado,
+  queryDocumentosGenerados,
 };
