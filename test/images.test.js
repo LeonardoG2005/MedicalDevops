@@ -68,3 +68,61 @@ test('Imagen: validación de datos inválidos devuelve 400', async () => {
 
   assert.equal(response.statusCode, 400);
 });
+
+test('Imagen: actualizar id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/imagenes/999',
+    payload: {
+      nombre: 'x.jpg',
+      url: 'https://example.com/x.jpg',
+      fecha_creacion: '2026-08-16',
+    },
+  });
+  assert.equal(response.statusCode, 404);
+});
+
+test('Imagen: eliminar id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+  const response = await app.inject({ method: 'DELETE', url: '/imagenes/999' });
+  assert.equal(response.statusCode, 404);
+});
+
+test('Imagen: QUERY por nombre y fecha_creacion', async () => {
+  const app = await buildApp();
+
+  await app.inject({
+    method: 'POST',
+    url: '/imagenes',
+    payload: {
+      nombre: 'radiografia_01.jpg',
+      url: 'https://example.com/radiografia_01.jpg',
+      fecha_creacion: '2026-08-16',
+    },
+  });
+
+  const byNombre = await app.inject({
+    method: 'QUERY',
+    url: '/imagenes',
+    payload: { nombre: 'radiografia' },
+  });
+  assert.equal(byNombre.statusCode, 200);
+  assert.equal(byNombre.json().length, 1);
+
+  const byFecha = await app.inject({
+    method: 'QUERY',
+    url: '/imagenes',
+    payload: { fecha_creacion: '2026-08-16' },
+  });
+  assert.equal(byFecha.statusCode, 200);
+  assert.equal(byFecha.json().length, 1);
+
+  const sinFiltros = await app.inject({
+    method: 'QUERY',
+    url: '/imagenes',
+    payload: {},
+  });
+  assert.equal(sinFiltros.statusCode, 200);
+  assert.equal(sinFiltros.json().length, 1);
+});

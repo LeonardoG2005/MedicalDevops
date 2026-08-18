@@ -135,3 +135,35 @@ test('Nota médica: id inexistente devuelve 404', async () => {
   const response = await app.inject({ method: 'GET', url: '/notas-medicas/999' });
   assert.equal(response.statusCode, 404);
 });
+
+test('Nota médica: actualizar id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/notas-medicas/999',
+    payload: {
+      paciente: 'X',
+      contenido: 'Y',
+      fecha: '2026-08-16',
+      imagen_id: image.id,
+    },
+  });
+  assert.equal(response.statusCode, 404);
+});
+
+test('Nota médica: eliminar id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+  const response = await app.inject({ method: 'DELETE', url: '/notas-medicas/999' });
+  assert.equal(response.statusCode, 404);
+});
+
+test('Nota médica: validación de datos inválidos devuelve 400', async () => {
+  const app = await buildApp();
+  const response = await app.inject({
+    method: 'POST',
+    url: '/notas-medicas',
+    payload: { invalido: true },
+  });
+  assert.equal(response.statusCode, 400);
+});
