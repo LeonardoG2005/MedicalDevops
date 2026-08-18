@@ -76,19 +76,21 @@ async function imagenesRoutes(app) {
     }
     return reply.code(204).send();
   });
+
+  app.route({
+    method: 'QUERY',
+    url: '/imagenes',
+    schema: {
+      tags: ['Imagenes'],
+      body: imagenQuerySchema,
+      response: {
+        200: { type: 'array', items: imagenSchema },
+      },
+    },
+    handler: async (request) => queryImagenes(request.body || {}),
+  });
 }
 
-app.route({
-  method: 'QUERY',
-  url: '/imagenes',
-  schema: {
-    tags: ['Imagenes'],
-    body: imagenQuerySchema,
-    response: {
-      200: { type: 'array', items: imagenSchema },
-    },
-  },
-  handler: async (request) => queryImagenes(request.body || {}),
-});
+
 
 module.exports = imagenesRoutes;
