@@ -23,7 +23,7 @@ async function buildApp() {
         version: '1.0.0',
         description: 'API académica para imágenes, notas médicas y documentos generados.',
       },
-      servers: [{ url: 'http://localhost:3000', description: 'Local development' }],
+      servers: [{url: '/', description: 'Current API server'}],
       tags: [
         { name: 'Health', description: 'Health checks' },
         { name: 'Imagenes', description: 'Gestión de imágenes' },
