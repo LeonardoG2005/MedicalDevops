@@ -1,5 +1,5 @@
-const { listImagenes, getImagenById, createImagen, updateImagen, deleteImagen } = require('../controllers/imagenes.controller');
-const { imagenSchema, imagenInputSchema, idParamSchema } = require('../schemas/imagenes.schema');
+const { listImagenes, getImagenById, createImagen, updateImagen, deleteImagen } = require('../controllers/images.controller');
+const { imagenSchema, imagenInputSchema, idParamSchema } = require('../schemas/images.schema');
 
 async function imagenesRoutes(app) {
   app.get('/imagenes', {

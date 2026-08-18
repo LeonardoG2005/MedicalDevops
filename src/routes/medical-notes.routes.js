@@ -5,13 +5,13 @@ const {
   updateNotaMedica,
   deleteNotaMedica,
   queryNotasMedicas,
-} = require('../controllers/notas-medicas.controller');
+} = require('../controllers/medical-notes.controller');
 const {
   notaMedicaSchema,
   notaMedicaInputSchema,
   notaMedicaQuerySchema,
   idParamSchema,
-} = require('../schemas/notas-medicas.schema');
+} = require('../schemas/medical-notes.schema');
 
 async function notasMedicasRoutes(app) {
   app.get('/notas-medicas', {
