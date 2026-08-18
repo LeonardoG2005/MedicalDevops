@@ -4,14 +4,13 @@ const {
   createDocumentoGenerado,
   updateDocumentoGenerado,
   deleteDocumentoGenerado,
-  queryDocumentosGenerados,
-} = require('../controllers/documentos-generados.controller');
+} = require('../controllers/generated-documents.controller');
 const {
   documentoGeneradoSchema,
   documentoGeneradoInputSchema,
   documentoGeneradoQuerySchema,
   idParamSchema,
-} = require('../schemas/documentos-generados.schema');
+} = require('../schemas/generated-documents.schema');
 
 async function documentosGeneradosRoutes(app) {
   app.get('/documentos-generados', {

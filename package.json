@@ -1,11 +1,12 @@
 {
   "name": "medical-documents-api",
   "version": "1.0.0",
-  "description": "Academic medical documents API with Fastify :)",
+  "description": "Academic medical documents API with Fastify by Leo :)",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "db:migrate": "node scripts/migrate.js",
     "test": "node --test --test-concurrency=1",
     "test:coverage": "c8 --reporter=text --reporter=lcov node --test --test-concurrency=1",
     "test:coverage:test": "c8 --check-coverage --branches 60 --functions 60 --lines 60 --statements 60 --reporter=text node --test --test-concurrency=1",

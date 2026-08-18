@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL}
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
