@@ -1,5 +1,5 @@
-const { listImagenes, getImagenById, createImagen, updateImagen, deleteImagen } = require('../controllers/imagenes.controller');
-const { imagenSchema, imagenInputSchema, idParamSchema } = require('../schemas/imagenes.schema');
+const { listImagenes, getImagenById, createImagen, updateImagen, deleteImagen, queryImagenes, } = require('../controllers/images.controller');
+const { imagenSchema, imagenInputSchema, imagenQuerySchema, idParamSchema } = require('../schemas/images.schema');
 
 async function imagenesRoutes(app) {
   app.get('/imagenes', {
@@ -77,5 +77,18 @@ async function imagenesRoutes(app) {
     return reply.code(204).send();
   });
 }
+
+app.route({
+  method: 'QUERY',
+  url: '/imagenes',
+  schema: {
+    tags: ['Imagenes'],
+    body: imagenQuerySchema,
+    response: {
+      200: { type: 'array', items: imagenSchema },
+    },
+  },
+  handler: async (request) => queryImagenes(request.body || {}),
+});
 
 module.exports = imagenesRoutes;

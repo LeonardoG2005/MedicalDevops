@@ -33,10 +33,39 @@ async function deleteImagen(id) {
   return result.rows[0] || null;
 }
 
+async function queryImagenes(filters = {}) {
+  const { nombre, fecha_creacion } = filters;
+  const clauses = [];
+  const values = [];
+
+  if (nombre) {
+    clauses.push(`nombre ILIKE $${values.length + 1}`);
+    values.push(`%${nombre}%`);
+  }
+
+  if (fecha_creacion) {
+    clauses.push(`fecha_creacion = $${values.length + 1}`);
+    values.push(fecha_creacion);
+  }
+
+  let sql = 'SELECT * FROM imagenes';
+
+  if (clauses.length > 0) {
+    sql += ` WHERE ${clauses.join(' AND ')}`;
+  }
+
+  sql += ' ORDER BY id ASC';
+
+  const result = await query(sql, values);
+
+  return result.rows;
+}
+
 module.exports = {
   listImagenes,
   getImagenById,
   createImagen,
   updateImagen,
   deleteImagen,
+  queryImagenes,
 };
