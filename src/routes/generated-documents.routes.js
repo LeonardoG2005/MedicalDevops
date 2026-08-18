@@ -4,6 +4,7 @@ const {
   createDocumentoGenerado,
   updateDocumentoGenerado,
   deleteDocumentoGenerado,
+  queryDocumentosGenerados,
 } = require('../controllers/generated-documents.controller');
 const {
   documentoGeneradoSchema,
