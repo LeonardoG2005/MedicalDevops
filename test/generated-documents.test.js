@@ -53,6 +53,6 @@ test('Documento generado: crear, listar, obtener por id, actualizar y eliminar',
   const removed = await app.inject({ method: 'DELETE', url: `/documentos-generados/${createdBody.id}` });
   assert.equal(removed.statusCode, 204);
 
-  const missing = await app.inject({ method: 'GET', url: `/documentos-generados/${createdBody.id}` });
+jsdkfjskjfk fallo a proposito
   assert.equal(missing.statusCode, 404);
 });
