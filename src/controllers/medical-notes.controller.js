@@ -34,7 +34,7 @@ async function deleteNotaMedica(id) {
 }
 
 async function queryNotasMedicas(filters = {}) {
-  const { paciente, fecha } = filters;
+  const { paciente, fecha, imagen_id} = filters;
   const clauses = [];
   const values = [];
 
@@ -46,6 +46,11 @@ async function queryNotasMedicas(filters = {}) {
   if (fecha) {
     clauses.push(`fecha = $${values.length + 1}`);
     values.push(fecha);
+  }
+
+  if (imagen_id) {
+    clauses.push(`imagen_id = $${values.length + 1}`);
+    values.push(imagen_id);
   }
 
   let sql = 'SELECT * FROM notas_medicas';

@@ -27,6 +27,7 @@ const notaMedicaQuerySchema = {
   properties: {
     paciente: { type: 'string' },
     fecha: { type: 'string', format: 'date' },
+    imagen_id: { type: 'integer' },
   },
   additionalProperties: false,
 };
