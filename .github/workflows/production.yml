@@ -1,60 +1,60 @@
 name: Production Environment CI
 
 on:
-  push:
+  push:       #esto también incluye los merges a main, un merge genera un push. 
     branches:
       - main
   pull_request:
     branches:
-      - main
+      - main 
 
 jobs:
-  production:
-    runs-on: ubuntu-latest
+  production:    #el job se llama production. 
+    runs-on: ubuntu-latest     #maquina virtual de github, pa correr el job
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine    # contenedor docker paralelo que queda en localhost:5432
         env:
           POSTGRES_DB: medical_prod
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres -d medical_prod"
+        options: >-        # indica que se debe esperar a que responde el contenedor con la bd responda.  
+          --health-cmd="pg_isready -U postgres -d medical_prod"     
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
-    env:
+    env:         # las variables de entorno que necesita el job. 
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medical_prod
 
     steps:
-      - name: Checkout
+      - name: Checkout       # clona el repo en la maquina virtual de github
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js        # instala la version de node. (la 22 pa que funque el QUERY)
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install dependencies         # npm ci se usa para que no modifique el package-lock.json. 
         run: npm ci --include=dev
 
-      - name: Setup database
-        run: npm run db:migrate
+      - name: Setup database              
+        run: npm run db:migrate           # corre las migraciones, el script usa la DATABASE_URL. 
 
       - name: Run tests
-        run: npm test
+        run: npm test                    # se corren los tests con la bd ya migrada. 
 
       - name: Run coverage gate
-        run: npm run test:coverage:prod
+        run: npm run test:coverage:prod        #  usa c8 para cobertura. 
 
       - name: Build Docker image
-        run: docker build -t medical-documents-api:prod .
+        run: docker build -t medical-documents-api:prod .       # crear la imagen con el dockerfile. y muere. 
 
       - name: Deploy to PRODUCTION
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

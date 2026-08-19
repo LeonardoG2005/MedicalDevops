@@ -15,6 +15,17 @@ const documentosGeneradosRoutes = require('./routes/generated-documents.routes')
 async function buildApp() {
   const app = Fastify({ logger: false });
 
+  app.setErrorHandler((error, request, reply) => {
+    if (error.code === '23503') {
+      return reply.status(400).send({ error: 'Bad Request', message: 'La referencia indicada no existe (FK inválida).' });
+    }
+    if (error.validation) {
+      return reply.status(400).send({ error: 'Bad Request', message: error.message });
+    }
+    request.log.error(error);
+    reply.status(500).send({ error: 'Internal Server Error' });
+  });
+
   await app.register(swagger, {
     openapi: {
       openapi: '3.0.0',
