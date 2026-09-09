@@ -57,6 +57,63 @@ test('Documento generado: crear, listar, obtener por id, actualizar y eliminar',
   assert.equal(missing.statusCode, 404);
 });
 
+test('Documento generado: PATCH actualiza parcialmente un documento', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+  const note = await createNote({ imagen_id: image.id });
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/documentos-generados',
+    payload: {
+      nombre: 'reporte_001.pdf',
+      tipo: 'PDF',
+      url: 'https://example.com/reporte_001.pdf',
+      fecha_generacion: '2026-08-16',
+      nota_medica_id: note.id,
+    },
+  });
+
+  assert.equal(created.statusCode, 201);
+
+  const createdBody = created.json();
+
+  const patched = await app.inject({
+    method: 'PATCH',
+    url: `/documentos-generados/${createdBody.id}`,
+    payload: {
+      nombre: 'reporte_actualizado.pdf',
+    },
+  });
+
+  assert.equal(patched.statusCode, 200);
+
+  const patchedBody = patched.json();
+
+  assert.equal(patchedBody.nombre, 'reporte_actualizado.pdf');
+  assert.equal(patchedBody.tipo, 'PDF');
+  assert.equal(
+    patchedBody.url,
+    'https://example.com/reporte_001.pdf',
+  );
+  assert.equal(patchedBody.fecha_generacion, '2026-08-16');
+  assert.equal(patchedBody.nota_medica_id, note.id);
+});
+
+test('Documento generado: PATCH de id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/documentos-generados/999',
+    payload: {
+      nombre: 'documento_actualizado.pdf',
+    },
+  });
+
+  assert.equal(response.statusCode, 404);
+});
+
 test('Documento generado: QUERY por tipo', async () => {
   const app = await buildApp();
   const image = await createImage();

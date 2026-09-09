@@ -3,12 +3,14 @@ const {
   getDocumentoGeneradoById,
   createDocumentoGenerado,
   updateDocumentoGenerado,
+  patchDocumentoGenerado,
   deleteDocumentoGenerado,
   queryDocumentosGenerados,
 } = require('../controllers/generated-documents.controller');
 const {
   documentoGeneradoSchema,
   documentoGeneradoInputSchema,
+  documentoGeneradoPatchSchema,
   documentoGeneradoQuerySchema,
   idParamSchema,
 } = require('../schemas/generated-documents.schema');
@@ -69,6 +71,34 @@ async function documentosGeneradosRoutes(app) {
     if (!documento) {
       return reply.code(404).send({ error: 'Documento no encontrado' });
     }
+    return documento;
+  });
+
+  app.patch('/documentos-generados/:id', {
+    schema: {
+      tags: ['DocumentosGenerados'],
+      params: idParamSchema,
+      body: documentoGeneradoPatchSchema,
+      response: {
+        200: documentoGeneradoSchema,
+        404: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const documento = await patchDocumentoGenerado(
+      request.params.id,
+      request.body,
+    );
+
+    if (!documento) {
+      return reply.code(404).send({ error: 'Documento no encontrado' });
+    }
+
     return documento;
   });
 
