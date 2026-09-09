@@ -28,6 +28,52 @@ async function updateDocumentoGenerado(id, payload) {
   return result.rows[0] || null;
 }
 
+async function patchDocumentoGenerado(id, payload) {
+  const fields = [];
+  const values = [];
+
+  if (payload.nombre !== undefined) {
+    fields.push(`nombre = $${values.length + 1}`);
+    values.push(payload.nombre);
+  }
+
+  if (payload.tipo !== undefined) {
+    fields.push(`tipo = $${values.length + 1}`);
+    values.push(payload.tipo);
+  }
+
+  if (payload.url !== undefined) {
+    fields.push(`url = $${values.length + 1}`);
+    values.push(payload.url);
+  }
+
+  if (payload.fecha_generacion !== undefined) {
+    fields.push(`fecha_generacion = $${values.length + 1}`);
+    values.push(payload.fecha_generacion);
+  }
+
+  if (payload.nota_medica_id !== undefined) {
+    fields.push(`nota_medica_id = $${values.length + 1}`);
+    values.push(payload.nota_medica_id);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  values.push(id);
+
+  const result = await query(
+    `UPDATE documentos_generados
+     SET ${fields.join(', ')}
+     WHERE id = $${values.length}
+     RETURNING *`,
+    values,
+  );
+
+  return result.rows[0] || null;
+}
+
 async function deleteDocumentoGenerado(id) {
   const result = await query('DELETE FROM documentos_generados WHERE id = $1 RETURNING id', [id]);
   return result.rows[0] || null;
@@ -82,6 +128,7 @@ module.exports = {
   getDocumentoGeneradoById,
   createDocumentoGenerado,
   updateDocumentoGenerado,
+  patchDocumentoGenerado,
   deleteDocumentoGenerado,
   queryDocumentosGenerados,
 };

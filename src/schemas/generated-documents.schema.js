@@ -24,6 +24,18 @@ const documentoGeneradoInputSchema = {
   additionalProperties: false,
 };
 
+const documentoGeneradoPatchSchema = {
+  type: 'object',
+  properties: {
+    nombre: { type: 'string' },
+    tipo: { type: 'string' },
+    url: { type: 'string' },
+    fecha_generacion: { type: 'string', format: 'date' },
+    nota_medica_id: { type: 'integer' },
+  },
+  additionalProperties: false,
+};
+
 const documentoGeneradoQuerySchema = {
   type: 'object',
   properties: {
@@ -38,6 +50,7 @@ const documentoGeneradoQuerySchema = {
 module.exports = {
   documentoGeneradoSchema,
   documentoGeneradoInputSchema,
+  documentoGeneradoPatchSchema,
   documentoGeneradoQuerySchema,
   idParamSchema: {
     type: 'object',
