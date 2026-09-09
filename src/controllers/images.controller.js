@@ -28,6 +28,42 @@ async function updateImagen(id, payload) {
   return result.rows[0] || null;
 }
 
+async function patchImagen(id, payload) {
+  const fields = [];
+  const values = [];
+
+  if (payload.nombre !== undefined) {
+    fields.push(`nombre = $${values.length + 1}`);
+    values.push(payload.nombre);
+  }
+
+  if (payload.url !== undefined) {
+    fields.push(`url = $${values.length + 1}`);
+    values.push(payload.url);
+  }
+
+  if (payload.fecha_creacion !== undefined) {
+    fields.push(`fecha_creacion = $${values.length + 1}`);
+    values.push(payload.fecha_creacion);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  values.push(id);
+
+  const result = await query(
+    `UPDATE imagenes
+     SET ${fields.join(', ')}
+     WHERE id = $${values.length}
+     RETURNING *`,
+    values,
+  );
+
+  return result.rows[0] || null;
+}
+
 async function deleteImagen(id) {
   const result = await query('DELETE FROM imagenes WHERE id = $1 RETURNING id', [id]);
   return result.rows[0] || null;
