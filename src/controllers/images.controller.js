@@ -101,6 +101,7 @@ module.exports = {
   listImagenes,
   getImagenById,
   createImagen,
+  patchImagen,
   updateImagen,
   deleteImagen,
   queryImagenes,
