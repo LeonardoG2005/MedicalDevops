@@ -89,6 +89,54 @@ test('Imagen: eliminar id inexistente devuelve 404', async () => {
   assert.equal(response.statusCode, 404);
 });
 
+test('Imagen: PATCH actualiza parcialmente una imagen', async () => {
+  const app = await buildApp();
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/imagenes',
+    payload: {
+      nombre: 'radiografia_01.jpg',
+      url: 'https://example.com/radiografia_01.jpg',
+      fecha_creacion: '2026-08-16',
+    },
+  });
+
+  assert.equal(created.statusCode, 201);
+
+  const id = created.json().id;
+
+  const patched = await app.inject({
+    method: 'PATCH',
+    url: `/imagenes/${id}`,
+    payload: {
+      nombre: 'radiografia_actualizada.jpg',
+    },
+  });
+
+  assert.equal(patched.statusCode, 200);
+
+  const body = patched.json();
+
+  assert.equal(body.nombre, 'radiografia_actualizada.jpg');
+  assert.equal(body.url, 'https://example.com/radiografia_01.jpg');
+  assert.equal(body.fecha_creacion, '2026-08-16');
+});
+
+test('Imagen: PATCH de id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/imagenes/999',
+    payload: {
+      nombre: 'x.jpg',
+    },
+  });
+
+  assert.equal(response.statusCode, 404);
+});
+
 test('Imagen: QUERY por nombre y fecha_creacion', async () => {
   const app = await buildApp();
 

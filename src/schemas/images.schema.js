@@ -20,6 +20,16 @@ const imagenInputSchema = {
   additionalProperties: false,
 };
 
+const imagenPatchSchema = {
+  type: 'object',
+  properties: {
+    nombre: { type: 'string' },
+    url: { type: 'string' },
+    fecha_creacion: { type: 'string', format: 'date' },
+  },
+  additionalProperties: false,
+};
+
 const imagenQuerySchema = {
   type: 'object',
   properties: {
@@ -40,6 +50,7 @@ const idParamSchema = {
 module.exports = {
   imagenSchema,
   imagenInputSchema,
+  imagenPatchSchema,
   imagenQuerySchema,
   idParamSchema,
 };

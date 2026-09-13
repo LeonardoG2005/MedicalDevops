@@ -1,5 +1,5 @@
-const { listImagenes, getImagenById, createImagen, updateImagen, deleteImagen, queryImagenes, } = require('../controllers/images.controller');
-const { imagenSchema, imagenInputSchema, imagenQuerySchema, idParamSchema } = require('../schemas/images.schema');
+const { listImagenes, getImagenById, createImagen, updateImagen, patchImagen, deleteImagen, queryImagenes, } = require('../controllers/images.controller');
+const { imagenSchema, imagenInputSchema, imagenQuerySchema, idParamSchema, imagenPatchSchema} = require('../schemas/images.schema');
 
 async function imagenesRoutes(app) {
   app.get('/imagenes', {
@@ -57,6 +57,26 @@ async function imagenesRoutes(app) {
     if (!imagen) {
       return reply.code(404).send({ error: 'Imagen no encontrada' });
     }
+    return imagen;
+  });
+
+  app.patch('/imagenes/:id', {
+    schema: {
+      tags: ['Imagenes'],
+      params: idParamSchema,
+      body: imagenPatchSchema,
+      response: {
+        200: imagenSchema,
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const imagen = await patchImagen(request.params.id, request.body);
+
+    if (!imagen) {
+      return reply.code(404).send({ error: 'Imagen no encontrada' });
+    }
+
     return imagen;
   });
 

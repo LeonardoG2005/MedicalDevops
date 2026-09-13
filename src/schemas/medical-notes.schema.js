@@ -22,6 +22,17 @@ const notaMedicaInputSchema = {
   additionalProperties: false,
 };
 
+const notaMedicaPatchSchema = {
+  type: 'object',
+  properties: {
+    paciente: { type: 'string' },
+    contenido: { type: 'string' },
+    fecha: { type: 'string', format: 'date' },
+    imagen_id: { type: 'integer' },
+  },
+  additionalProperties: false,
+};
+
 const notaMedicaQuerySchema = {
   type: 'object',
   properties: {
@@ -35,6 +46,7 @@ const notaMedicaQuerySchema = {
 module.exports = {
   notaMedicaSchema,
   notaMedicaInputSchema,
+  notaMedicaPatchSchema,
   notaMedicaQuerySchema,
   idParamSchema: {
     type: 'object',

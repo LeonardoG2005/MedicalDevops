@@ -28,6 +28,47 @@ async function updateNotaMedica(id, payload) {
   return result.rows[0] || null;
 }
 
+async function patchNotaMedica(id, payload) {
+  const fields = [];
+  const values = [];
+
+  if (payload.paciente !== undefined) {
+    fields.push(`paciente = $${values.length + 1}`);
+    values.push(payload.paciente);
+  }
+
+  if (payload.contenido !== undefined) {
+    fields.push(`contenido = $${values.length + 1}`);
+    values.push(payload.contenido);
+  }
+
+  if (payload.fecha !== undefined) {
+    fields.push(`fecha = $${values.length + 1}`);
+    values.push(payload.fecha);
+  }
+
+  if (payload.imagen_id !== undefined) {
+    fields.push(`imagen_id = $${values.length + 1}`);
+    values.push(payload.imagen_id);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  values.push(id);
+
+  const result = await query(
+    `UPDATE notas_medicas
+     SET ${fields.join(', ')}
+     WHERE id = $${values.length}
+     RETURNING *`,
+    values,
+  );
+
+  return result.rows[0] || null;
+}
+
 async function deleteNotaMedica(id) {
   const result = await query('DELETE FROM notas_medicas WHERE id = $1 RETURNING id', [id]);
   return result.rows[0] || null;
@@ -67,6 +108,7 @@ module.exports = {
   listNotasMedicas,
   getNotaMedicaById,
   createNotaMedica,
+  patchNotaMedica,
   updateNotaMedica,
   deleteNotaMedica,
   queryNotasMedicas,

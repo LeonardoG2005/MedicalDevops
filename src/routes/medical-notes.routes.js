@@ -3,12 +3,14 @@ const {
   getNotaMedicaById,
   createNotaMedica,
   updateNotaMedica,
+  patchNotaMedica, 
   deleteNotaMedica,
   queryNotasMedicas,
 } = require('../controllers/medical-notes.controller');
 const {
   notaMedicaSchema,
   notaMedicaInputSchema,
+  notaMedicaPatchSchema,
   notaMedicaQuerySchema,
   idParamSchema,
 } = require('../schemas/medical-notes.schema');
@@ -69,6 +71,26 @@ async function notasMedicasRoutes(app) {
     if (!nota) {
       return reply.code(404).send({ error: 'Nota médica no encontrada' });
     }
+    return nota;
+  });
+
+  app.patch('/notas-medicas/:id', {
+    schema: {
+      tags: ['NotasMedicas'],
+      params: idParamSchema,
+      body: notaMedicaPatchSchema,
+      response: {
+        200: notaMedicaSchema,
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const nota = await patchNotaMedica(request.params.id, request.body);
+
+    if (!nota) {
+      return reply.code(404).send({ error: 'Nota médica no encontrada' });
+    }
+
     return nota;
   });
 

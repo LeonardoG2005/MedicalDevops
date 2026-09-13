@@ -54,6 +54,58 @@ test('Nota médica: crear, listar, obtener por id, actualizar y eliminar', async
   assert.equal(missing.statusCode, 404);
 });
 
+
+test('Nota médica: PATCH actualiza parcialmente una nota médica', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/notas-medicas',
+    payload: {
+      paciente: 'Paciente 001',
+      contenido: 'Paciente presenta dolor de cabeza.',
+      fecha: '2026-08-16',
+      imagen_id: image.id,
+    },
+  });
+
+  assert.equal(created.statusCode, 201);
+  const createdBody = created.json();
+
+  const patched = await app.inject({
+    method: 'PATCH',
+    url: `/notas-medicas/${createdBody.id}`,
+    payload: {
+      contenido: 'Se observa mejoría.',
+    },
+  });
+
+  assert.equal(patched.statusCode, 200);
+
+  const patchedBody = patched.json();
+
+  assert.equal(patchedBody.paciente, 'Paciente 001');
+  assert.equal(patchedBody.contenido, 'Se observa mejoría.');
+  assert.equal(patchedBody.fecha, '2026-08-16');
+  assert.equal(patchedBody.imagen_id, image.id);
+});
+
+
+test('Nota médica: PATCH de id inexistente devuelve 404', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/notas-medicas/999',
+    payload: {
+      contenido: 'Contenido actualizado.',
+    },
+  });
+
+  assert.equal(response.statusCode, 404);
+});
+
 test('Nota médica: QUERY por paciente', async () => {
   const app = await buildApp();
   const image = await createImage();
