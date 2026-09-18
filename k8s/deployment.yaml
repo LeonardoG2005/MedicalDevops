@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-documents-api
+  namespace: default
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: medical-documents-api
+
+  template:
+    metadata:
+      labels:
+        app: medical-documents-api
+
+    spec:
+      serviceAccountName: medical-api
+
+      containers:
+        - name: medical-documents-api
+
+          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-documents-api:v1
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            - name: PORT
+              value: "3000"
+
+            - name: HOST
+              value: "0.0.0.0"
+
+            - name: NODE_ENV
+              value: "production"
+
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medical-api-secrets
+                  key: DATABASE_URL
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+        - name: cloud-sql-proxy
+
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4
+
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "project-40fc41d1-6899-4ce0-9ef:us-central1:medical-devops-db"
+
+          securityContext:
+            runAsNonRoot: true
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
