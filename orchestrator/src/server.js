@@ -1,17 +1,30 @@
 const Fastify = require('fastify');
+const { loadConfig } = require('./config/env');
+const orchestrationRoutes = require('./routes/orchestration.routes');
 
-const server = Fastify({ logger: true });
-const port = Number.parseInt(process.env.PORT || '4000', 10);
+const buildServer = (options = {}) => {
+  const server = Fastify({ logger: options.logger ?? true });
+  const config = options.config || loadConfig();
 
-server.get('/health', async () => ({ status: 'ok' }));
+  server.get('/health', async () => ({ status: 'ok' }));
+  server.register(orchestrationRoutes, { config });
+
+  return { server, config };
+};
 
 const start = async () => {
+  const { server, config } = buildServer();
+
   try {
-    await server.listen({ host: '0.0.0.0', port });
+    await server.listen({ host: '0.0.0.0', port: config.port });
   } catch (error) {
     server.log.error(error);
     process.exit(1);
   }
 };
 
-start();
+if (require.main === module) {
+  start();
+}
+
+module.exports = { buildServer };
