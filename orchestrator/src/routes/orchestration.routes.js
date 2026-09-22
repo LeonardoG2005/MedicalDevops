@@ -40,18 +40,18 @@ const orchestrationRoutes = async (server, options) => {
   });
 
   registerCompositionRoute('/orchestrate/imagen/:id', {
-    petAdoption: ['/api/v2/animals'],
-    pss: ['/api/v2/entidades/vuelos']
+    petAdoption: ['/api/animals'],
+    pss: ['/api/vuelos']
   });
 
   registerCompositionRoute('/orchestrate/nota-medica/:id', {
-    petAdoption: ['/api/v2/adoptantes'],
-    pss: ['/pasajeros']
+    petAdoption: ['/api/adoptantes'],
+    pss: ['/api/pasajeros']
   });
 
   registerCompositionRoute('/orchestrate/documento-generado/:id', {
-    petAdoption: ['/api/v2/adopciones'],
-    pss: ['/asientos-asignados']
+    petAdoption: ['/api/adopciones'],
+    pss: ['/api/asientos-asignados']
   });
 
   server.get('/orchestrate/:id', async (request, reply) => {

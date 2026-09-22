@@ -16,7 +16,7 @@ spec:
       serviceAccountName: medical-orchestrator
       containers:
         - name: medical-orchestrator
-          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:v1
+          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:v2-v1-contracts
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
