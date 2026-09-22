@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { getJson } = require('../services/api-client');
 const { createPubSubPublisher } = require('../services/pubsub-publisher');
+const { createSagaRunner } = require('../services/saga');
 
 const orchestrationRoutes = async (server, options) => {
   const config = options.config;
@@ -8,6 +9,7 @@ const orchestrationRoutes = async (server, options) => {
     projectId: config.gcpProjectId,
     topicName: config.pubsubTopic || 'medical-orchestrator-events'
   });
+  const runSaga = options.runSaga || createSagaRunner({ config });
   const getTraceId = (request) => request.headers['x-trace-id'] || request.headers.traceparent || crypto.randomUUID();
 
   server.post('/api/v2/flujo', async (request, reply) => {
@@ -41,6 +43,28 @@ const orchestrationRoutes = async (server, options) => {
     message: 'Durable saga state storage is not configured',
     traceId: request.params.traceId
   }));
+
+  server.post('/internal/pubsub', async (request, reply) => {
+    const envelope = request.body || {};
+    const encoded = envelope.message && envelope.message.data;
+
+    if (!encoded) {
+      return reply.code(400).send({ error: 'Invalid Pub/Sub message' });
+    }
+
+    try {
+      const message = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+      if (!message.traceId) {
+        return reply.code(400).send({ error: 'Message traceId is required' });
+      }
+      const result = await runSaga(message);
+      request.log.info({ traceId: result.traceId, steps: result.steps }, 'Saga completed');
+      return reply.code(204).send();
+    } catch (error) {
+      request.log.error({ err: error, traceId: error.traceId }, 'Saga failed');
+      return reply.code(500).send({ error: 'Saga processing failed' });
+    }
+  });
 
   const fetchExternalCollections = async (config, traceId, paths) => {
     const buildUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}${path}`;
