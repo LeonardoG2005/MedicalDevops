@@ -48,6 +48,29 @@ async function buildApp(options = {}) {
   await app.register(swaggerUi, { routePrefix: '/documentation' });
   app.addHttpMethod('QUERY', { hasBody: true, overrideExisting: true });
 
+  app.get('/', {
+    schema: {
+      tags: ['Health'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            service: { type: 'string' },
+            message: { type: 'string' },
+            health: { type: 'string' },
+            documentation: { type: 'string' },
+          },
+          required: ['service', 'message', 'health', 'documentation'],
+        },
+      },
+    },
+  }, async () => ({
+    service: 'Medical Documents API',
+    message: 'API funcionando correctamente',
+    health: '/health',
+    documentation: '/documentation',
+  }));
+
   app.get('/health', {
     schema: {
       tags: ['Health'],

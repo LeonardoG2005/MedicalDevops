@@ -6,6 +6,7 @@ metadata:
 
 spec:
   type: LoadBalancer
+  loadBalancerIP: 34.123.58.136
 
   selector:
     app: medical-documents-api
