@@ -13,7 +13,7 @@ const getJson = async (url, traceparent, timeoutMs = DEFAULT_TIMEOUT_MS) => {
 
   try {
     response = await fetch(url, {
-      headers: traceparent ? { traceparent } : {},
+      headers: traceparent ? { 'X-Trace-Id': traceparent, traceparent } : {},
       signal: AbortSignal.timeout(timeoutMs)
     });
   } catch (error) {
