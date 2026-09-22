@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medical-orchestrator-config
+  namespace: default
+data:
+  PORT: "4000"
+  API_A_URL: ""
+  API_C_URL: "http://aa11cf2e5dd814f8cbf7485099e3b46f-618055784.us-east-1.elb.amazonaws.com"

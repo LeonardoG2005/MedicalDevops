@@ -1,0 +1,16 @@
+{
+  "name": "medical-orchestrator",
+  "version": "1.0.0",
+  "description": "Medical API orchestration service",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0"
+  }
+}

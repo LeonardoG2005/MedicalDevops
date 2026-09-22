@@ -5,7 +5,7 @@ metadata:
   namespace: default
 
 spec:
-  type: ClusterIP
+  type: LoadBalancer
 
   selector:
     app: medical-documents-api
