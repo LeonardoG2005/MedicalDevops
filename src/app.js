@@ -11,8 +11,9 @@ const swaggerUi = require('@fastify/swagger-ui');
 const imagenesRoutes = require('./routes/images.routes');
 const notasMedicasRoutes = require('./routes/medical-notes.routes');
 const documentosGeneradosRoutes = require('./routes/generated-documents.routes');
+const v2Routes = require('./v2/routes');
 
-async function buildApp() {
+async function buildApp(options = {}) {
   const app = Fastify({ logger: false });
 
   app.setErrorHandler((error, request, reply) => {
@@ -64,6 +65,10 @@ async function buildApp() {
   await app.register(imagenesRoutes);
   await app.register(notasMedicasRoutes);
   await app.register(documentosGeneradosRoutes);
+  await app.register(v2Routes, {
+    orchestratorClient: options.orchestratorClient,
+    orchestratorUrl: options.orchestratorUrl,
+  });
 
   return app;
 }
