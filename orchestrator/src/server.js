@@ -7,7 +7,7 @@ const buildServer = (options = {}) => {
   const config = options.config || loadConfig();
 
   server.get('/health', async () => ({ status: 'ok' }));
-  server.register(orchestrationRoutes, { config });
+  server.register(orchestrationRoutes, { config, publisher: options.publisher });
 
   return { server, config };
 };

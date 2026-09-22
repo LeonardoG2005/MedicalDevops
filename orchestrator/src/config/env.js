@@ -28,7 +28,9 @@ const parseOptionalUrl = (name, value) => {
 const loadConfig = (environment = process.env) => ({
   port: parsePort(environment.PORT),
   pssApiUrl: parseOptionalUrl('API_A_URL', environment.API_A_URL),
-  petAdoptionApiUrl: parseOptionalUrl('API_C_URL', environment.API_C_URL)
+  petAdoptionApiUrl: parseOptionalUrl('API_C_URL', environment.API_C_URL),
+  gcpProjectId: environment.GCP_PROJECT_ID,
+  pubsubTopic: environment.PUBSUB_TOPIC || 'medical-orchestrator-events'
 });
 
 module.exports = { loadConfig };
