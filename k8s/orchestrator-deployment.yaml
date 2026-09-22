@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-orchestrator
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medical-orchestrator
+  template:
+    metadata:
+      labels:
+        app: medical-orchestrator
+    spec:
+      serviceAccountName: medical-orchestrator
+      containers:
+        - name: medical-orchestrator
+          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:v2-v1-contracts
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: medical-orchestrator-config
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
