@@ -10,7 +10,9 @@ test('loads defaults and external API URLs', () => {
   }), {
     port: 4000,
     pssApiUrl: 'https://pss.example.test/',
-    petAdoptionApiUrl: 'https://pets.example.test/'
+    petAdoptionApiUrl: 'https://pets.example.test/',
+    gcpProjectId: undefined,
+    pubsubTopic: 'medical-orchestrator-events'
   });
 });
 
