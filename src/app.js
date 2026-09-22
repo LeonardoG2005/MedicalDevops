@@ -68,6 +68,7 @@ async function buildApp(options = {}) {
   await app.register(v2Routes, {
     orchestratorClient: options.orchestratorClient,
     orchestratorUrl: options.orchestratorUrl,
+    localResources: options.localResources,
   });
 
   return app;

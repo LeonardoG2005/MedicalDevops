@@ -8,21 +8,22 @@ async function v2Routes(app, options) {
   const getExternal = options.orchestratorClient || createOrchestratorClient({
     baseUrl: options.orchestratorUrl || process.env.ORCHESTRATOR_URL,
   });
+  const localResources = options.localResources || {};
 
   app.get('/api/v2/imagenes/:id/composition', async (request, reply) => createCompositionHandler({
-    getLocal: getImagenById,
+    getLocal: localResources.imagen || getImagenById,
     getExternal,
     localKey: 'imagen',
   })(request, reply));
 
   app.get('/api/v2/notas-medicas/:id/composition', async (request, reply) => createCompositionHandler({
-    getLocal: getNotaMedicaById,
+    getLocal: localResources.notaMedica || getNotaMedicaById,
     getExternal,
     localKey: 'notaMedica',
   })(request, reply));
 
   app.get('/api/v2/documentos-generados/:id/composition', async (request, reply) => createCompositionHandler({
-    getLocal: getDocumentoGeneradoById,
+    getLocal: localResources.documentoGenerado || getDocumentoGeneradoById,
     getExternal,
     localKey: 'documentoGenerado',
   })(request, reply));
