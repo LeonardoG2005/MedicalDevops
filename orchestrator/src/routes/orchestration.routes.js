@@ -6,9 +6,11 @@ const orchestrationRoutes = async (server, options) => {
   const getTraceId = (request) => request.headers['x-trace-id'] || request.headers.traceparent || crypto.randomUUID();
 
   const fetchExternalCollections = async (config, traceId, paths) => {
+    const buildUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}${path}`;
+
     const [petAdoption, pss] = await Promise.all([
-      Promise.all(paths.petAdoption.map((path) => getJson(`${config.petAdoptionApiUrl}${path}`, traceId))),
-      Promise.all(paths.pss.map((path) => getJson(`${config.pssApiUrl}${path}`, traceId)))
+      Promise.all(paths.petAdoption.map((path) => getJson(buildUrl(config.petAdoptionApiUrl, path), traceId))),
+      Promise.all(paths.pss.map((path) => getJson(buildUrl(config.pssApiUrl, path), traceId)))
     ]);
 
     return {
