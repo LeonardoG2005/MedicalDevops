@@ -5,15 +5,17 @@ const { createSagaRunner } = require('../services/saga');
 
 const orchestrationRoutes = async (server, options) => {
   const config = options.config;
+  const metrics = options.metrics;
   const publisher = options.publisher || createPubSubPublisher({
     projectId: config.gcpProjectId,
     topicName: config.pubsubTopic || 'medical-orchestrator-events'
   });
-  const runSaga = options.runSaga || createSagaRunner({ config });
+  const runSaga = options.runSaga || createSagaRunner({ config, metrics });
   const getTraceId = (request) => request.headers['x-trace-id'] || request.headers.traceparent || crypto.randomUUID();
 
   server.post('/api/v2/flujo', async (request, reply) => {
     const traceId = getTraceId(request);
+    const startedAt = metrics.flowStarted();
     const message = {
       traceId,
       type: 'medical-orchestration-flow',
@@ -24,12 +26,14 @@ const orchestrationRoutes = async (server, options) => {
 
     try {
       const messageId = await publisher.publish(message);
+      metrics.flowCompleted(startedAt);
       return reply.code(202).header('X-Trace-Id', traceId).send({
         traceId,
         status: 'pending',
         messageId
       });
     } catch (error) {
+      metrics.flowFailed(startedAt);
       request.log.error(error);
       return reply.code(503).header('X-Trace-Id', traceId).send({
         error: 'Message broker unavailable',
