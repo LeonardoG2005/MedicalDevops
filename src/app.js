@@ -12,9 +12,12 @@ const imagenesRoutes = require('./routes/images.routes');
 const notasMedicasRoutes = require('./routes/medical-notes.routes');
 const documentosGeneradosRoutes = require('./routes/generated-documents.routes');
 const v2Routes = require('./v2/routes');
+const { createMetrics } = require('./services/metrics');
 
 async function buildApp(options = {}) {
   const app = Fastify({ logger: false });
+  const metrics = options.metrics || createMetrics();
+  metrics.registerRequestHooks(app);
 
   app.setErrorHandler((error, request, reply) => {
     if (error.code === '23503') {
@@ -47,6 +50,11 @@ async function buildApp(options = {}) {
 
   await app.register(swaggerUi, { routePrefix: '/documentation' });
   app.addHttpMethod('QUERY', { hasBody: true, overrideExisting: true });
+
+  app.get('/metrics', async (request, reply) => {
+    reply.type(metrics.contentType);
+    return metrics.getMetrics();
+  });
 
   app.get('/', {
     schema: {

@@ -22,3 +22,15 @@ test('GET / devuelve información de bienvenida y enlaces útiles', async () => 
     documentation: '/documentation',
   });
 });
+
+test('GET /metrics exposes Prometheus HTTP metrics', async () => {
+  const app = await buildApp();
+  await app.inject({ method: 'GET', url: '/health' });
+
+  const response = await app.inject({ method: 'GET', url: '/metrics' });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers['content-type'], /text\/plain/);
+  assert.match(response.body, /http_requests_total/);
+  assert.match(response.body, /http_request_duration_seconds/);
+});
