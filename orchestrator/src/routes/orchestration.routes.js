@@ -79,7 +79,7 @@ const orchestrationRoutes = async (server, options) => {
     ]);
 
     return {
-      petAdoption,
+      petAdoption: petAdoption.map((response) => response?.data ?? response),
       pss
     };
   };
@@ -105,17 +105,17 @@ const orchestrationRoutes = async (server, options) => {
   });
 
   registerCompositionRoute('/orchestrate/imagen/:id', {
-    petAdoption: ['/api/animals'],
+    petAdoption: ['/api/v2/animals'],
     pss: ['/api/vuelos']
   });
 
   registerCompositionRoute('/orchestrate/nota-medica/:id', {
-    petAdoption: ['/api/adoptantes'],
+    petAdoption: ['/api/v2/adoptantes'],
     pss: ['/api/pasajeros']
   });
 
   registerCompositionRoute('/orchestrate/documento-generado/:id', {
-    petAdoption: ['/api/adopciones'],
+    petAdoption: ['/api/v2/adopciones'],
     pss: ['/api/asientos-asignados']
   });
 
