@@ -7,7 +7,7 @@ const createSagaRunner = ({ config, fetchJson = getJson, metrics }) => async (me
       name: 'pet-adoption-collection',
       service: 'pet-adoption',
       cloud: 'external',
-      endpoint: '/api/animals',
+      endpoint: '/api/v2/animals',
       baseUrl: config.petAdoptionApiUrl
     },
     {
@@ -26,7 +26,8 @@ const createSagaRunner = ({ config, fetchJson = getJson, metrics }) => async (me
       if (!step.baseUrl) {
         throw new Error(`Missing URL for ${step.name}`);
       }
-      step.result = await fetchJson(`${step.baseUrl.replace(/\/$/, '')}${step.endpoint}`, traceId);
+      const response = await fetchJson(`${step.baseUrl.replace(/\/$/, '')}${step.endpoint}`, traceId);
+      step.result = response?.data ?? response;
       step.status = 'completed';
       metrics?.externalRequest(step.service, 'success', startedAt);
       metrics?.stepCompleted(step);
