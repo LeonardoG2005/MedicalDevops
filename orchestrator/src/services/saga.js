@@ -14,7 +14,7 @@ const createSagaRunner = ({ config, fetchJson = getJson, metrics }) => async (me
       name: 'pss-flight-collection',
       service: 'kiusys',
       cloud: 'external',
-      endpoint: '/api/vuelos',
+      endpoint: '/api/v2/entidades/vuelos',
       baseUrl: config.pssApiUrl
     }
   ];

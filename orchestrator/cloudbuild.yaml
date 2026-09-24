@@ -1,0 +1,10 @@
+# Comando para hacer deploy del orquestador : gcloud builds submit --config orchestrator/cloudbuild.yaml 
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:$SHORT_SHA', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:$SHORT_SHA']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: ['run', 'deploy', 'medical-orchestrator', '--image', 'us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:$SHORT_SHA', '--region', 'us-central1']
