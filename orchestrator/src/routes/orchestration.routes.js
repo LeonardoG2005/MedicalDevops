@@ -51,6 +51,11 @@ const orchestrationRoutes = async (server, options) => {
   server.post('/internal/pubsub', async (request, reply) => {
     const envelope = request.body || {};
     const encoded = envelope.message && envelope.message.data;
+    const deliveryAttempt = envelope.deliveryAttempt || 1;
+
+    if (deliveryAttempt > 1) {
+      metrics.queueReprocessed();
+    }
 
     if (!encoded) {
       return reply.code(400).send({ error: 'Invalid Pub/Sub message' });
@@ -106,17 +111,17 @@ const orchestrationRoutes = async (server, options) => {
 
   registerCompositionRoute('/orchestrate/imagen/:id', {
     petAdoption: ['/api/v2/animals'],
-    pss: ['/api/vuelos']
+    pss: ['/api/v2/entidades/vuelos']
   });
 
   registerCompositionRoute('/orchestrate/nota-medica/:id', {
     petAdoption: ['/api/v2/adoptantes'],
-    pss: ['/api/pasajeros']
+    pss: ['/api/v2/entidades/pasajeros']
   });
 
   registerCompositionRoute('/orchestrate/documento-generado/:id', {
     petAdoption: ['/api/v2/adopciones'],
-    pss: ['/api/asientos-asignados']
+    pss: ['/api/v2/entidades/asientos-asignados']
   });
 
   server.get('/orchestrate/:id', async (request, reply) => {
