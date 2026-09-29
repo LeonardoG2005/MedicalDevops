@@ -26,6 +26,13 @@
   "dependencies": {
     "@fastify/swagger": "^9.2.1",
     "@fastify/swagger-ui": "^5.0.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@prometheus-io/client": "^0.16.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",

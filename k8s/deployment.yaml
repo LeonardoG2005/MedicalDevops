@@ -52,6 +52,13 @@ spec:
                   name: medical-api-secrets
                   key: API_A_URL
 
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-otlp
+                  key: OTEL_EXPORTER_OTLP_HEADERS
+                  optional: true
+
           startupProbe:
             httpGet:
               path: /health

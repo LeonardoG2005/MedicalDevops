@@ -1,3 +1,5 @@
+require('./telemetry');
+
 const { buildApp } = require('./app');
 const { port, host } = require('./config');
 

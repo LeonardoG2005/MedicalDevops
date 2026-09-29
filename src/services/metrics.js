@@ -5,6 +5,7 @@ const {
   collectDefaultMetrics,
   prometheusContentType,
 } = require('@prometheus-io/client');
+const { recordHttpRequest } = require('./otel-metrics');
 
 const createMetrics = () => {
   const registry = new Registry();
@@ -41,6 +42,7 @@ const createMetrics = () => {
         requestsTotal.inc(labels);
         const elapsedSeconds = Number(process.hrtime.bigint() - request.metricsStartedAt) / 1e9;
         requestDuration.observe(labels, elapsedSeconds);
+        recordHttpRequest(request.method, request.routeOptions?.url || 'sin_ruta', reply.statusCode, elapsedSeconds * 1000);
       });
     },
     getMetrics: () => registry.metrics(),
