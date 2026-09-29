@@ -67,6 +67,7 @@ const orchestrationRoutes = async (server, options) => {
         resourceId: message.payload && message.payload.id,
         entities: result.entities
       }, 'Flow completed');
+      metrics.messageProcessed?.();
       return reply.code(204).send();
     } catch (error) {
       request.log.error({

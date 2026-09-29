@@ -1,3 +1,7 @@
+if (require.main === module) {
+  require('./telemetry');
+}
+
 const Fastify = require('fastify');
 const { loadConfig } = require('./config/env');
 const orchestrationRoutes = require('./routes/orchestration.routes');

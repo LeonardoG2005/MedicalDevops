@@ -5,6 +5,7 @@ const {
   collectDefaultMetrics,
   prometheusContentType,
 } = require('@prometheus-io/client');
+const otel = require('./otel-metrics');
 
 const createMetrics = () => {
   const registry = new Registry();
@@ -28,15 +29,19 @@ const createMetrics = () => {
       server.addHook('onResponse', async (request, reply) => {
         if (request.url === '/metrics') return;
         const labels = { method: request.method, route: request.routeOptions?.url || 'unknown', status_code: String(reply.statusCode) };
+        const elapsedSeconds = Number(process.hrtime.bigint() - request.metricsStartedAt) / 1e9;
         httpRequests.inc(labels);
-        httpDuration.observe(labels, Number(process.hrtime.bigint() - request.metricsStartedAt) / 1e9);
+        httpDuration.observe(labels, elapsedSeconds);
+        otel.recordHttpRequest(request.method, request.routeOptions?.url || 'sin_ruta', reply.statusCode, elapsedSeconds * 1000);
       });
     },
     flowStarted: () => process.hrtime.bigint(),
     flowCompleted: (startedAt) => {
       flows.inc({ status: 'completed' });
       flowDuration.observe(Number(process.hrtime.bigint() - startedAt) / 1e9);
+      otel.queuePublished();
     },
+    messageProcessed: () => otel.queueProcessed(),
     flowFailed: (startedAt) => {
       flows.inc({ status: 'failed' });
       flowFailures.inc();
@@ -48,7 +53,10 @@ const createMetrics = () => {
       stepFailures.inc({ step: step.name, service: step.service });
     },
     externalRequest: (service, status, startedAt) => externalDuration.observe({ service, status }, Number(process.hrtime.bigint() - startedAt) / 1e9),
-    queueReprocessed: () => queueReprocessed.inc(),
+    queueReprocessed: () => {
+      queueReprocessed.inc();
+      otel.queueReprocessed();
+    },
     getMetrics: () => registry.metrics(),
     contentType: prometheusContentType,
   };
