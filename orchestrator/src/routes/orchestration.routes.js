@@ -9,7 +9,11 @@ const orchestrationRoutes = async (server, options) => {
     projectId: config.gcpProjectId,
     topicName: config.pubsubTopic || 'medical-orchestrator-events'
   });
-  const processFlow = options.processFlow || createFlowProcessor({ config, metrics });
+  const completionPublisher = options.completionPublisher || createPubSubPublisher({
+    projectId: config.gcpProjectId,
+    topicName: config.completedTopic || 'medical-orchestrator-completed-events'
+  });
+  const processFlow = options.processFlow || createFlowProcessor({ config, metrics, completionPublisher });
   const getTraceId = (request) => request.headers['x-trace-id'] || request.headers.traceparent || crypto.randomUUID();
 
   server.post('/api/v2/flujo', async (request, reply) => {
