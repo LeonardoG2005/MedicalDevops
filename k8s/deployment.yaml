@@ -21,7 +21,7 @@ spec:
       containers:
         - name: medical-documents-api
 
-          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-documents-api:v3-metrics
+          image: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-documents-api:v4-v2-2
           imagePullPolicy: IfNotPresent
 
           ports:
