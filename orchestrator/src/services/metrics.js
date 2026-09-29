@@ -7,6 +7,8 @@ const {
   prometheusContentType,
 } = require('@prometheus-io/client');
 
+const { metrics: otel } = require('@opentelemetry/api');
+
 const createMetrics = () => {
   const registry = new Registry();
   collectDefaultMetrics({ register: registry });
@@ -18,6 +20,11 @@ const createMetrics = () => {
   const httpDuration = new Histogram({ name: 'http_request_duration_seconds', help: 'Orchestrator HTTP request duration', labelNames: ['method', 'route', 'status_code'], registers: [registry] });
   const queueReprocessed = new Counter({ name: 'orchestrator_queue_messages_reprocessed_total', help: 'Pub/Sub messages redelivered after a previous failed attempt', registers: [registry] });
   const queuePending = new Gauge({ name: 'orchestrator_queue_messages_pending', help: 'Messages published and not yet completed', registers: [registry] });
+  const meter = otel.getMeter('medical-orchestrator');
+  const oFlows = meter.createCounter('orchestrator.flows');
+  const oFlowDuration = meter.createHistogram('orchestrator.flow.duration', { unit: 's' });
+  const oPending = meter.createUpDownCounter('orchestrator.queue.messages.pending');
+  const oReprocessed = meter.createCounter('orchestrator.queue.messages.reprocessed');
 
   return {
     registerRequestHooks: (server) => {
@@ -33,20 +40,32 @@ const createMetrics = () => {
     },
     flowStarted: () => {
       queuePending.inc();
+      oPending.add(1);
       return process.hrtime.bigint();
     },
     flowCompleted: (startedAt) => {
+      const s = Number(process.hrtime.bigint() - startedAt) / 1e9;
       flows.inc({ status: 'completed' });
-      flowDuration.observe(Number(process.hrtime.bigint() - startedAt) / 1e9);
+      flowDuration.observe(s);
+      oFlows.add(1, { status: 'completed' });
+      oFlowDuration.record(s);
     },
     flowFailed: (startedAt) => {
+      const s = Number(process.hrtime.bigint() - startedAt) / 1e9;
       flows.inc({ status: 'failed' });
       flowFailures.inc();
-      flowDuration.observe(Number(process.hrtime.bigint() - startedAt) / 1e9);
+      flowDuration.observe(s);
+      oFlows.add(1, { status: 'failed' });
+      oFlowDuration.record(s);
     },
-    flowProcessed: () => queuePending.dec(),
-    externalRequest: (service, status, startedAt) => externalDuration.observe({ service, status }, Number(process.hrtime.bigint() - startedAt) / 1e9),
-    queueReprocessed: () => queueReprocessed.inc(),
+    flowProcessed: () => {
+      queuePending.dec();
+      oPending.add(-1);
+    },
+    queueReprocessed: () => {
+      queueReprocessed.inc();
+      oReprocessed.add(1);
+    },
     getMetrics: () => registry.metrics(),
     contentType: prometheusContentType,
   };

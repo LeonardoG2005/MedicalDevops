@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "--require", "@opentelemetry/auto-instrumentations-node/register", "src/server.js"]

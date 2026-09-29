@@ -4,7 +4,7 @@
   "description": "Medical API orchestration service",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --require @opentelemetry/auto-instrumentations-node/register src/server.js",
     "test": "node --test"
   },
   "engines": {

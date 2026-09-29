@@ -37,7 +37,7 @@ const createFlowProcessor = ({ config, metrics }) => async (message) => {
 
     try {
       entities[request.name] = await getJson(request.url, traceId);
-      
+
       metrics?.externalRequest(request.service, 'success', startedAt);
     } catch (error) {
       metrics?.externalRequest(request.service, 'error', startedAt);
@@ -45,21 +45,30 @@ const createFlowProcessor = ({ config, metrics }) => async (message) => {
     }
   }
 
-  const finalMessage = {
-    traceId,
-    type: 'medical-orchestration-flow',
-    status: 'completed',
-    pasos: [
-      { api: 'api_b', cloud: 'gcp', entidad: entities.medical },
-      { api: 'api_c', cloud: 'aws', entidad: entities.apiC },
-    ],
+  const vueloRaw = entities.apiA;
+  const vuelo = vueloRaw && typeof vueloRaw.vuelo === 'object' ? vueloRaw.vuelo : vueloRaw;
+
+  const body = {
+    vuelo_id: vuelo?.id ?? null,
+    origen: vuelo?.origen ?? null,
+    destino: vuelo?.destino ?? null,
+    fecha: vuelo?.fecha ?? null,
+    mensaje: {
+      traceId,
+      type: 'medical-orchestration-flow',
+      status: 'completed',
+      pasos: [
+        { api: 'medical-api', cloud: 'gcp', entidad: entities.medical },
+        { api: 'adoption-api', cloud: 'aws', entidad: entities.apiC },
+        { api: 'api-a-pss', cloud: 'oci', entidad: entities.apiA },
+      ],
+    },
   };
 
-  // NOTA: confirmar con Juan el nombre exacto de los campos que espera /api/v2/mensaje.
   if (config.apiAUrl) {
     const startedAt = process.hrtime.bigint();
     try {
-      await postJson(`${config.apiAUrl.replace(/\/$/, '')}/api/v2/mensaje`, finalMessage, traceId);
+      await postJson(`${config.apiAUrl.replace(/\/$/, '')}/api/v2/mensaje`, body, traceId);
       metrics?.externalRequest('api-a-mensaje', 'success', startedAt);
     } catch (error) {
       metrics?.externalRequest('api-a-mensaje', 'error', startedAt);
