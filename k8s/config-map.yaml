@@ -7,3 +7,7 @@ data:
   PORT: "3000"
   HOST: "0.0.0.0"
   NODE_ENV: "production"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-us-east-3.grafana.net/otlp"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_SERVICE_NAME: "medical-api"
+  OTEL_TRACES_EXPORTER: "otlp"

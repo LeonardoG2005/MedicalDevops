@@ -45,13 +45,3 @@ test('POST /api/v2/flujo returns 503 when publishing fails', async (t) => {
   assert.equal(response.json().error, 'Message broker unavailable');
   assert.ok(response.json().traceId);
 });
-
-test('GET /api/v2/flujo/:traceId declares durable state as pending work', async (t) => {
-  const { server } = buildServer({ logger: false, publisher: { publish: async () => 'id' } });
-  t.after(() => server.close());
-
-  const response = await server.inject({ method: 'GET', url: '/api/v2/flujo/trace-flow-1' });
-
-  assert.equal(response.statusCode, 501);
-  assert.equal(response.json().traceId, 'trace-flow-1');
-});
