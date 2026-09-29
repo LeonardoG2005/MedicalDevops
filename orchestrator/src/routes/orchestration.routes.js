@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const { createPubSubPublisher } = require('../services/pubsub-publisher');
-const { createSagaRunner } = require('../services/saga');
+const { createFlowProcessor } = require('../services/flow-processor');
 
 const orchestrationRoutes = async (server, options) => {
   const config = options.config;
@@ -9,7 +9,7 @@ const orchestrationRoutes = async (server, options) => {
     projectId: config.gcpProjectId,
     topicName: config.pubsubTopic || 'medical-orchestrator-events'
   });
-  const runSaga = options.runSaga || createSagaRunner({ config, metrics });
+  const processFlow = options.processFlow || createFlowProcessor({ config, metrics });
   const getTraceId = (request) => request.headers['x-trace-id'] || request.headers.traceparent || crypto.randomUUID();
 
   server.post('/api/v2/flujo', async (request, reply) => {
@@ -41,12 +41,6 @@ const orchestrationRoutes = async (server, options) => {
     }
   });
 
-  server.get('/api/v2/flujo/:traceId', async (request, reply) => reply.code(501).send({
-    error: 'Not Implemented',
-    message: 'Durable saga state storage is not configured',
-    traceId: request.params.traceId
-  }));
-
   server.post('/internal/pubsub', async (request, reply) => {
     const envelope = request.body || {};
     const encoded = envelope.message && envelope.message.data;
@@ -66,22 +60,22 @@ const orchestrationRoutes = async (server, options) => {
       if (!message.traceId) {
         return reply.code(400).send({ error: 'Message traceId is required' });
       }
-      const result = await runSaga(message);
+      const result = await processFlow(message);
       request.log.info({
         traceId: result.traceId,
         resource: message.payload && message.payload.resource,
         resourceId: message.payload && message.payload.id,
-        steps: result.steps
-      }, 'Saga completed');
+        entities: result.entities
+      }, 'Flow completed');
       return reply.code(204).send();
     } catch (error) {
       request.log.error({
         err: error,
-        traceId: error.traceId,
+        traceId: message && message.traceId,
         resource: message && message.payload && message.payload.resource,
         resourceId: message && message.payload && message.payload.id
-      }, 'Saga failed');
-      return reply.code(500).send({ error: 'Saga processing failed' });
+      }, 'Flow failed');
+      return reply.code(500).send({ error: 'Flow processing failed' });
     }
   });
 };

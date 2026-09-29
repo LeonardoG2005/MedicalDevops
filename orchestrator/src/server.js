@@ -17,7 +17,7 @@ const buildServer = (options = {}) => {
   server.register(orchestrationRoutes, {
     config,
     publisher: options.publisher,
-    runSaga: options.runSaga,
+    processFlow: options.processFlow,
     metrics
   });
 
