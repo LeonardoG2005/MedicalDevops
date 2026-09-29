@@ -1,6 +1,6 @@
 const { getJson } = require('./api-client');
 
-const createFlowProcessor = ({ config, metrics, completionPublisher }) => async (message) => {
+const createFlowProcessor = ({ config, metrics }) => async (message) => {
   const traceId = message.traceId;
   const resource = message.payload?.resource;
   const id = message.payload?.id;
@@ -42,16 +42,11 @@ const createFlowProcessor = ({ config, metrics, completionPublisher }) => async 
     }
   }
 
-  const result = {
+  return {
     traceId,
     status: 'completed',
     entities,
-    completedAt: new Date().toISOString(),
   };
-
-  await completionPublisher.publish(result);
-
-  return result;
 };
 
 module.exports = { createFlowProcessor };

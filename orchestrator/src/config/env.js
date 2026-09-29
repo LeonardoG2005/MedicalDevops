@@ -34,7 +34,7 @@ const loadConfig = (environment = process.env) => ({
   ),
 
   apiAUrl: parseOptionalUrl(
-    'API_A_URL',
+  'API_A_URL',
     environment.API_A_URL
   ),
 
@@ -48,10 +48,6 @@ const loadConfig = (environment = process.env) => ({
   pubsubTopic:
     environment.PUBSUB_TOPIC ||
     'medical-orchestrator-events',
-
-  completedTopic:
-    environment.COMPLETED_TOPIC ||
-    'medical-orchestrator-completed-events',
 });
 
 module.exports = { loadConfig };
