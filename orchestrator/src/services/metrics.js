@@ -19,7 +19,7 @@ const createMetrics = () => {
   const httpDuration = new Histogram({ name: 'http_request_duration_seconds', help: 'Orchestrator HTTP request duration', labelNames: ['method', 'route', 'status_code'], registers: [registry] });
   const queueReprocessed = new Counter({ name: 'orchestrator_queue_messages_reprocessed_total', help: 'Pub/Sub messages redelivered after a previous failed attempt', registers: [registry] });
 
-
+  
   return {
     registerRequestHooks: (server) => {
       server.addHook('onRequest', async (request) => {
@@ -48,9 +48,9 @@ const createMetrics = () => {
       stepFailures.inc({ step: step.name, service: step.service });
     },
     externalRequest: (service, status, startedAt) => externalDuration.observe({ service, status }, Number(process.hrtime.bigint() - startedAt) / 1e9),
+    queueReprocessed: () => queueReprocessed.inc(),
     getMetrics: () => registry.metrics(),
     contentType: prometheusContentType,
-    queueReprocessed: () => queueReprocessed.inc(),
   };
 };
 
