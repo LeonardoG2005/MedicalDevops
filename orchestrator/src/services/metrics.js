@@ -62,6 +62,10 @@ const createMetrics = () => {
       queuePending.dec();
       oPending.add(-1);
     },
+    
+    externalRequest: (service, status, startedAt) => 
+    externalDuration.observe({ service, status }, Number(process.hrtime.bigint() - startedAt) / 1e9),
+
     queueReprocessed: () => {
       queueReprocessed.inc();
       oReprocessed.add(1);
