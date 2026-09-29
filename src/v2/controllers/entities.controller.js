@@ -16,6 +16,8 @@ const {
   getAnimalRandom,
 } = require('../services/peer-client');
 
+const crypto = require('node:crypto');
+
 function getRandomItem(items) {
   if (!Array.isArray(items) || items.length === 0) {
     return null;
@@ -93,39 +95,49 @@ async function getRandomDocumentoGenerado(request, reply) {
   }
 }
 
-
 async function getImagenByIdWithPeers(request, reply) {
   const { id } = request.params;
 
+  const traceId =
+    request.headers['x-trace-id'] ||
+    crypto.randomUUID();
+
   try {
-    // 1. Buscar la imagen en nuestra propia base de datos
     const imagen = await getImagenById(id);
 
     if (!imagen) {
-      return reply.code(404).send({
-        error: 'Imagen no encontrada',
-      });
+      return reply
+        .code(404)
+        .header('X-Trace-Id', traceId)
+        .send({
+          error: 'Imagen no encontrada',
+          traceId,
+        });
     }
 
-    // 2. Consultar directamente las APIs de los compañeros
     const [vuelo, animal] = await Promise.all([
-      getVueloRandom(request),
-      getAnimalRandom(request),
+      getVueloRandom(traceId),
+      getAnimalRandom(traceId),
     ]);
 
-    // 3. Devolver la composición
-    return reply.send({
-      imagen,
-      vuelo,
-      animal,
-    });
+    return reply
+      .header('X-Trace-Id', traceId)
+      .send({
+        traceId,
+        imagen,
+        vuelo,
+        animal,
+      });
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(502).send({
-      error: 'Error consultando las APIs de los compañeros',
-      message: error.message,
-    });
+    return reply
+      .code(502)
+      .header('X-Trace-Id', traceId)
+      .send({
+        error: 'Error consultando las APIs de los compañeros',
+        traceId,
+      });
   }
 }
 

@@ -40,6 +40,18 @@ spec:
                   name: medical-api-secrets
                   key: DATABASE_URL
 
+            - name: API_C_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medical-api-secrets
+                  key: API_C_URL
+
+            - name: API_A_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medical-api-secrets
+                  key: API_A_URL
+
           startupProbe:
             httpGet:
               path: /health

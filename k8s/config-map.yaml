@@ -7,4 +7,3 @@ data:
   PORT: "3000"
   HOST: "0.0.0.0"
   NODE_ENV: "production"
-  ORCHESTRATOR_URL: "https://medical-orchestrator-xuzo6mv7ta-uc.a.run.app"
