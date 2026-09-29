@@ -1,5 +1,4 @@
 const crypto = require('node:crypto');
-const { getJson } = require('../services/api-client');
 const { createPubSubPublisher } = require('../services/pubsub-publisher');
 const { createSagaRunner } = require('../services/saga');
 
@@ -53,82 +52,37 @@ const orchestrationRoutes = async (server, options) => {
     const encoded = envelope.message && envelope.message.data;
     const deliveryAttempt = envelope.deliveryAttempt || 1;
 
-    if (deliveryAttempt > 1) {
-      metrics.queueReprocessed();
-    }
-
     if (!encoded) {
       return reply.code(400).send({ error: 'Invalid Pub/Sub message' });
     }
 
+    if (deliveryAttempt > 1) {
+      metrics.queueReprocessed();
+    }
+
+    let message;
     try {
-      const message = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+      message = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
       if (!message.traceId) {
         return reply.code(400).send({ error: 'Message traceId is required' });
       }
       const result = await runSaga(message);
-      request.log.info({ traceId: result.traceId, steps: result.steps }, 'Saga completed');
+      request.log.info({
+        traceId: result.traceId,
+        resource: message.payload && message.payload.resource,
+        resourceId: message.payload && message.payload.id,
+        steps: result.steps
+      }, 'Saga completed');
       return reply.code(204).send();
     } catch (error) {
-      request.log.error({ err: error, traceId: error.traceId }, 'Saga failed');
+      request.log.error({
+        err: error,
+        traceId: error.traceId,
+        resource: message && message.payload && message.payload.resource,
+        resourceId: message && message.payload && message.payload.id
+      }, 'Saga failed');
       return reply.code(500).send({ error: 'Saga processing failed' });
     }
-  });
-
-  const fetchExternalCollections = async (config, traceId, paths) => {
-    const buildUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}${path}`;
-
-    const [petAdoption, pss] = await Promise.all([
-      Promise.all(paths.petAdoption.map((path) => getJson(buildUrl(config.petAdoptionApiUrl, path), traceId))),
-      Promise.all(paths.pss.map((path) => getJson(buildUrl(config.pssApiUrl, path), traceId)))
-    ]);
-
-    return {
-      petAdoption: petAdoption.map((response) => response?.data ?? response),
-      pss
-    };
-  };
-
-  const registerCompositionRoute = (url, paths) => server.get(url, async (request, reply) => {
-    const traceId = getTraceId(request);
-
-    try {
-      const external = await fetchExternalCollections(config, traceId, paths);
-      return reply.header('X-Trace-Id', traceId).send({
-        sources: {
-          petAdoption: external.petAdoption,
-          pss: external.pss
-        }
-      });
-    } catch (error) {
-      return reply.code(error.status === 404 ? 404 : 502).send({
-        error: 'External dependency error',
-        message: error.message,
-        traceId
-      });
-    }
-  });
-
-  registerCompositionRoute('/orchestrate/imagen/:id', {
-    petAdoption: ['/api/v2/animals'],
-    pss: ['/api/v2/entidades/vuelos']
-  });
-
-  registerCompositionRoute('/orchestrate/nota-medica/:id', {
-    petAdoption: ['/api/v2/adoptantes'],
-    pss: ['/api/v2/entidades/pasajeros']
-  });
-
-  registerCompositionRoute('/orchestrate/documento-generado/:id', {
-    petAdoption: ['/api/v2/adopciones'],
-    pss: ['/api/v2/entidades/asientos-asignados']
-  });
-
-  server.get('/orchestrate/:id', async (request, reply) => {
-    return reply.code(501).send({
-      error: 'Not Implemented',
-      message: 'The integration contract is still pending'
-    });
   });
 };
 
