@@ -1,16 +1,10 @@
-async function getJson(url, request) {
-  const headers = {
-    accept: 'application/json',
-  };
-
-  // Propagamos el trace-id si existe
-  if (request?.headers?.['x-trace-id']) {
-    headers['x-trace-id'] = request.headers['x-trace-id'];
-  }
-
+async function getJson(url, traceId) {
   const response = await fetch(url, {
     method: 'GET',
-    headers,
+    headers: {
+      accept: 'application/json',
+      ...(traceId ? { 'x-trace-id': traceId } : {}),
+    },
   });
 
   if (!response.ok) {
@@ -22,33 +16,30 @@ async function getJson(url, request) {
   return response.json();
 }
 
-
-async function getVueloRandom(request) {
-  const baseUrl = process.env.JUAN_API_BASE_URL;
+async function getVueloRandom(traceId) {
+  const baseUrl = process.env.API_A_URL;
 
   if (!baseUrl) {
-    throw new Error('Falta JUAN_API_BASE_URL en las variables de entorno');
+    throw new Error('Falta API_A_URL en las variables de entorno');
   }
 
-  const url =
-    `${baseUrl.replace(/\/$/, '')}` +
-    '/api/v2/entidades/vuelos/random';
-
-  return getJson(url, request);
+  return getJson(
+    `${baseUrl.replace(/\/$/, '')}/api/v2/entidades/vuelos/random`,
+    traceId
+  );
 }
 
-async function getAnimalRandom(request) {
-  const baseUrl = process.env.ANGEL_API_BASE_URL;
+async function getAnimalRandom(traceId) {
+  const baseUrl = process.env.API_C_URLL;
 
   if (!baseUrl) {
-    throw new Error('Falta ANGEL_API_BASE_URL en las variables de entorno');
+    throw new Error('Falta API_C_URL en las variables de entorno');
   }
 
-  const url =
-    `${baseUrl.replace(/\/$/, '')}` +
-    '/api/v2/animals/random';
-
-  return getJson(url, request);
+  return getJson(
+    `${baseUrl.replace(/\/$/, '')}/api/v2/animals/random`,
+    traceId
+  );
 }
 
 module.exports = {
