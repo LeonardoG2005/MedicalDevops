@@ -30,7 +30,7 @@ async function getVueloRandom(traceId) {
 }
 
 async function getAnimalRandom(traceId) {
-  const baseUrl = process.env.API_C_URLL;
+  const baseUrl = process.env.API_C_URL;
 
   if (!baseUrl) {
     throw new Error('Falta API_C_URL en las variables de entorno');
