@@ -96,11 +96,7 @@ async function buildApp(options = {}) {
   await app.register(imagenesRoutes);
   await app.register(notasMedicasRoutes);
   await app.register(documentosGeneradosRoutes);
-  await app.register(v2Routes, {
-    orchestratorClient: options.orchestratorClient,
-    orchestratorUrl: options.orchestratorUrl,
-    localResources: options.localResources,
-  });
+  await app.register(v2Routes);
 
   return app;
 }

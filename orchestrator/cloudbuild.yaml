@@ -2,6 +2,7 @@
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
+    dir: 'orchestrator'
     args: ['build', '-t', 'us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:$SHORT_SHA', '.']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-orchestrator:$SHORT_SHA']
