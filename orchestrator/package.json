@@ -4,7 +4,7 @@
   "description": "Medical API orchestration service",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --require @opentelemetry/auto-instrumentations-node/register src/server.js",
     "test": "node --test"
   },
   "engines": {
@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "@google-cloud/pubsub": "^6.1.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@prometheus-io/client": "^0.16.1",
     "fastify": "^5.0.0"
   }

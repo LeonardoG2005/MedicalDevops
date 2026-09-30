@@ -5,12 +5,14 @@ const { loadConfig } = require('../src/config/env');
 test('loads defaults and external API URLs', () => {
   assert.deepEqual(loadConfig({
     PORT: '',
+    MEDICAL_API_URL: 'https://medical.example.test',
     API_A_URL: 'https://pss.example.test',
     API_C_URL: 'https://pets.example.test'
   }), {
     port: 4000,
-    pssApiUrl: 'https://pss.example.test/',
-    petAdoptionApiUrl: 'https://pets.example.test/',
+    medicalApiUrl: 'https://medical.example.test/',
+    apiAUrl: 'https://pss.example.test/',
+    apiCUrl: 'https://pets.example.test/',
     gcpProjectId: undefined,
     pubsubTopic: 'medical-orchestrator-events'
   });
