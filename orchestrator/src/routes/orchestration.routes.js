@@ -61,6 +61,7 @@ const orchestrationRoutes = async (server, options) => {
         return reply.code(400).send({ error: 'Message traceId is required' });
       }
       const result = await processFlow(message);
+      metrics.flowProcessed();
       request.log.info({
         traceId: result.traceId,
         resource: message.payload && message.payload.resource,

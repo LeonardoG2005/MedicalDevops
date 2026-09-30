@@ -51,6 +51,18 @@ spec:
                 secretKeyRef:
                   name: medical-api-secrets
                   key: API_A_URL
+                  
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: medical-api-otel
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: medical-api-otel
+                  key: OTEL_EXPORTER_OTLP_HEADERS
 
           startupProbe:
             httpGet:
