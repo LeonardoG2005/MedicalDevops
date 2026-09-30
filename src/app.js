@@ -80,6 +80,7 @@ async function buildApp(options = {}) {
   }));
 
   app.get('/health', {
+    logLevel: 'silent',
     schema: {
       tags: ['Health'],
       response: {

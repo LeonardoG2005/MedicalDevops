@@ -15,13 +15,14 @@ const withServer = async (handler, callback) => {
   }
 };
 
-test('GET client parses JSON and forwards traceparent', async () => {
+test('GET client forwards X-Trace-Id', async () => {
   await withServer((request, response) => {
-    assert.equal(request.headers.traceparent, '00-trace-id');
+    assert.equal(request.headers['x-trace-id'], 'trace-abc');
+    assert.equal(request.headers.traceparent, undefined);
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true }));
   }, async (url) => {
-    assert.deepEqual(await getJson(url, '00-trace-id'), { ok: true });
+    assert.deepEqual(await getJson(url, 'trace-abc'), { ok: true });
   });
 });
 
