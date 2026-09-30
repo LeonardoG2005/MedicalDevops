@@ -15,7 +15,7 @@ const v2Routes = require('./v2/routes');
 const { createMetrics } = require('./services/metrics');
 
 async function buildApp(options = {}) {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: true });
   const metrics = options.metrics || createMetrics();
   metrics.registerRequestHooks(app);
 
