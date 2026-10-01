@@ -1,0 +1,114 @@
+name: Production Environment CI/CD
+
+on:
+  push:  
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  GCP_REGION: us-central1
+  ARTIFACT_REPO: medical-api
+  IMAGE_NAME: medical-documents-api
+  GKE_CLUSTER: medical-devops-gke
+  GKE_LOCATION: us-central1
+
+jobs:
+  production:  
+    runs-on: ubuntu-latest   
+
+    services:
+      postgres:
+        image: postgres:16-alpine  
+        env:
+          POSTGRES_DB: medical_prod
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-      
+          --health-cmd="pg_isready -U postgres -d medical_prod"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:       
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medical_prod
+
+    steps:
+      - name: Checkout   
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js      
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies        
+        run: npm ci --include=dev
+
+      - name: Setup database
+        run: npm run db:migrate      
+
+      - name: Build Docker image
+        run: docker build -t "$IMAGE_NAME:${{ github.sha }}" .
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+
+      - name: Authenticate to Google Cloud
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: projects/400345348270/locations/global/workloadIdentityPools/github/providers/github-medicaldevops
+          service_account: github-actions-deployer@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Tag and push image to Artifact Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${{ github.sha }}"
+          docker tag "$IMAGE_NAME:${{ github.sha }}" "$IMAGE_URI"
+          docker push "$IMAGE_URI"
+
+      - name: Get GKE credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_LOCATION }}
+
+      - name: Apply Kubernetes manifests
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          kubectl apply -f k8s/config-map.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/pod-monitoring.yaml
+          kubectl apply -f k8s/secret-provider-class.yaml
+          kubectl apply -f k8s/secret-sync.yaml
+          kubectl apply -f k8s/service-account.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Deploy to PRODUCTION
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${{ github.sha }}"
+          kubectl set image deployment/medical-documents-api \
+            medical-documents-api="$IMAGE_URI" \
+            -n default
+          kubectl rollout status deployment/medical-documents-api -n default --timeout=300s
