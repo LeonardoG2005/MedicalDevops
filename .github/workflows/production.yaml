@@ -95,7 +95,14 @@ jobs:
 
       - name: Apply Kubernetes manifests
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: kubectl apply -f k8s/
+        run: |
+          kubectl apply -f k8s/config-map.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/pod-monitoring.yaml
+          kubectl apply -f k8s/secret-provider-class.yaml
+          kubectl apply -f k8s/secret-sync.yaml
+          kubectl apply -f k8s/service-account.yaml
+          kubectl apply -f k8s/service.yaml
 
       - name: Deploy to PRODUCTION
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
