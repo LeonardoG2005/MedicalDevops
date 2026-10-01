@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   GCP_PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
   GCP_REGION: us-central1
@@ -61,9 +65,11 @@ jobs:
 
       - name: Authenticate to Google Cloud
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: projects/400345348270/locations/global/workloadIdentityPools/github/providers/github-medicaldevops
+          service_account: github-actions-deployer@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com
 
       - name: Set up Cloud SDK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -91,7 +97,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: kubectl apply -f k8s/
 
-      - name: Deploy to PRODUCTION (roll out new image)
+      - name: Deploy to PRODUCTION
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${{ github.sha }}"
