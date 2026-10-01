@@ -24,7 +24,7 @@ El proyecto integra 3 APIs independientes, cada una en una nube distinta, coordi
 
 ```mermaid
 flowchart LR
-  Cliente([Cliente / Postman]) -->|"POST /api/v2/flujo<br/>+ X-Trace-Id"| Orq
+  Cliente[Cliente / Postman] -->|"POST /api/v2/flujo + X-Trace-Id"| Orq
 
   subgraph GCP["GCP - operado por Leonardo Guevara (este repo)"]
     Orq[Orquestador<br/>Cloud Run]
@@ -46,20 +46,22 @@ flowchart LR
     Bucket[(Object Storage<br/>snapshots del flujo)]
   end
 
-  Grafana[Grafana Cloud<br/>métricas · logs · trazas · alertas]
+  Grafana[Grafana Cloud<br/>métricas, logs, trazas, alerta]
 
-  Orq <-->|mensaje| PubSub --> Orq
+  Orq <-->|mensaje| PubSub
   Orq -->|"1. GET imagen"| ApiC
   Orq -->|"2. GET animal"| ApiB
-  Orq -->|"3. GET vuelo · 4. POST mensaje"| ApiA
-  ApiC --> SQL
+  Orq -->|"3. GET vuelo, 4. POST /api/v2/mensaje"| LB --> ApiA
   ApiA --> PG
-  ApiA --> Bucket
+  ApiA -->|"flujo/trace_id.json"| Bucket
+  Bucket --> Consumer -->|"adjuntos/trace_id/resumen.md"| Bucket
+  ApiA -.->|entidades en tiempo real| ApiB
+  ApiA -.-> ApiC
   ApiB --> Redis
-
-  ApiC -.->|integración directa v2| ApiA
-  ApiC -.->|integración directa v2| ApiB
-
+  ApiB -.-> ApiA
+  ApiB -.-> ApiC
+  ApiC -.-> ApiA
+  ApiC -.-> ApiB
   ApiA -. OTLP .-> Grafana
   ApiB -. OTLP .-> Grafana
   ApiC -. OTLP .-> Grafana
