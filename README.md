@@ -24,42 +24,43 @@ El proyecto integra 3 APIs independientes, cada una en una nube distinta, coordi
 
 ```mermaid
 flowchart LR
-  Cliente([Cliente / Postman]) -->|"POST /api/v2/flujo<br/>+ X-Trace-Id"| Orq
+  Cliente[Cliente / Postman] -->|"POST /api/v2/flujo + X-Trace-Id"| Orq
 
-  subgraph GCP["GCP — operado por Leonardo Guevara (este repo)"]
+  subgraph GCP["GCP - Leonardo Guevara"]
     Orq[Orquestador<br/>Cloud Run]
-    PubSub[("Pub/Sub<br/>medical-orchestrator-events<br/>reintentos")]
-    subgraph GKE["GKE — 2 réplicas + HPA"]
-      ApiC[API C — Documentos médicos<br/>Imagen · NotaMedica · DocumentoGenerado]
-    end
-    SQL[(Cloud SQL<br/>PostgreSQL, vía proxy)]
+    PubSub[(Pub/Sub<br/>reintentos)]
+    ApiC[API C documentos<br/>GKE]
   end
 
-  subgraph AWS["AWS — operado por Angel Avirama"]
-    ApiB[API B — Adopción<br/>EKS]
+  subgraph AWS["AWS - Angel Avirama"]
+    ApiB[API B adopción<br/>EKS]
     Redis[(ElastiCache Redis<br/>caché con TTL)]
   end
 
-  subgraph OCI["OCI — operado por Juan José Giraldo"]
-    ApiA[API A — PSS Aerolínea<br/>OKE, 2-5 réplicas, HPA]
-    PG[(PostgreSQL<br/>Block Volume)]
-    Bucket[(Object Storage<br/>snapshots del flujo)]
+  subgraph OCI["OCI - Juan José Giraldo"]
+    LB[Load Balancer<br/>157-137-193-66.sslip.io]
+    ApiA[API A PSS<br/>OKE 2-5 réplicas, HPA]
+    PG[(Postgres<br/>Block Volume)]
+    Bucket[(Object Storage<br/>clic-kiusys-flow)]
+    Consumer[Consumidor del bucket<br/>OKE]
   end
 
-  Grafana[Grafana Cloud<br/>métricas · logs · trazas · alertas]
+  Grafana[Grafana Cloud<br/>métricas, logs, trazas, alerta]
 
-  Orq <-->|mensaje| PubSub --> Orq
+  Orq <-->|mensaje| PubSub
   Orq -->|"1. GET imagen"| ApiC
   Orq -->|"2. GET animal"| ApiB
-  Orq -->|"3. GET vuelo · 4. POST mensaje"| ApiA
-  ApiC --> SQL
+  Orq -->|"3. GET vuelo, 4. POST /api/v2/mensaje"| LB --> ApiA
   ApiA --> PG
-  ApiA --> Bucket
+  ApiA -->|"flujo/trace_id.json"| Bucket
+  Bucket --> Consumer -->|"adjuntos/trace_id/resumen.md"| Bucket
+  ApiA -.->|entidades en tiempo real| ApiB
+  ApiA -.-> ApiC
   ApiB --> Redis
-
-  ApiC -.->|integración directa v2| ApiA
-  ApiC -.->|integración directa v2| ApiB
-
+  ApiB -.-> ApiA
+  ApiB -.-> ApiC
+  ApiC -.-> ApiA
+  ApiC -.-> ApiB
   ApiA -. OTLP .-> Grafana
   ApiB -. OTLP .-> Grafana
   ApiC -. OTLP .-> Grafana
