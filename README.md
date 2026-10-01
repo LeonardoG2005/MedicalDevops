@@ -188,7 +188,6 @@ Manifiestos en `k8s/`:
 | `service-account.yaml` | Service Account de K8s enlazada (Workload Identity) a una cuenta de servicio de GCP |
 | `pod-monitoring.yaml` | `PodMonitoring` (Google Cloud Managed Prometheus) scrapeando `/metrics` cada 30s |
 
-> **Pendiente:** `k8s/hpa.yaml` (HorizontalPodAutoscaler, 2-5 réplicas por CPU) está implementado localmente pero aún no está commiteado a este repo. Aplícalo con `kubectl apply -f k8s/hpa.yaml` una vez esté en el repo.
 
 ## Observabilidad
 
