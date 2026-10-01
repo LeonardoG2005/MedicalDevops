@@ -17,7 +17,7 @@ env:
   GCP_REGION: us-central1
   ARTIFACT_REPO: medical-api
   IMAGE_NAME: medical-documents-api
-  GKE_CLUSTER: TU_CLUSTER_GKE_AQUI
+  GKE_CLUSTER: medical-devops-gke
   GKE_LOCATION: us-central1
 
 jobs:
