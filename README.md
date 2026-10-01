@@ -16,7 +16,7 @@ Repositorio: https://github.com/LeonardoG2005/MedicalDevops
 imagenes ──< notas_medicas ──< documentos_generados
 ```
 
-Ambas relaciones son `NOT NULL` con `ON DELETE CASCADE` — borrar una imagen borra en cascada sus notas y documentos.
+Ambas relaciones son `NOT NULL` con `ON DELETE CASCADE` - borrar una imagen borra en cascada sus notas y documentos.
 
 ## Arquitectura general del grupo
 
@@ -26,22 +26,22 @@ El proyecto integra 3 APIs independientes, cada una en una nube distinta, coordi
 flowchart LR
   Cliente([Cliente / Postman]) -->|"POST /api/v2/flujo<br/>+ X-Trace-Id"| Orq
 
-  subgraph GCP["GCP — operado por Leonardo Guevara (este repo)"]
+  subgraph GCP["GCP - operado por Leonardo Guevara (este repo)"]
     Orq[Orquestador<br/>Cloud Run]
     PubSub[("Pub/Sub<br/>medical-orchestrator-events<br/>reintentos")]
-    subgraph GKE["GKE — 2 réplicas + HPA"]
-      ApiC[API C — Documentos médicos<br/>Imagen · NotaMedica · DocumentoGenerado]
+    subgraph GKE["GKE - 2 réplicas + HPA"]
+      ApiC[API C - Documentos médicos<br/>Imagen · NotaMedica · DocumentoGenerado]
     end
     SQL[(Cloud SQL<br/>PostgreSQL, vía proxy)]
   end
 
-  subgraph AWS["AWS — operado por Angel Avirama"]
-    ApiB[API B — Adopción<br/>EKS]
+  subgraph AWS["AWS - operado por Angel Avirama"]
+    ApiB[API B - Adopción<br/>EKS]
     Redis[(ElastiCache Redis<br/>caché con TTL)]
   end
 
-  subgraph OCI["OCI — operado por Juan José Giraldo"]
-    ApiA[API A — PSS Aerolínea<br/>OKE, 2-5 réplicas, HPA]
+  subgraph OCI["OCI - operado por Juan José Giraldo"]
+    ApiA[API A - PSS Aerolínea<br/>OKE, 2-5 réplicas, HPA]
     PG[(PostgreSQL<br/>Block Volume)]
     Bucket[(Object Storage<br/>snapshots del flujo)]
   end
@@ -84,14 +84,14 @@ flowchart LR
 | Observabilidad | OpenTelemetry (trazas, métricas, logs) → OTLP → Grafana Cloud |
 | Métricas | `prom-client` compatible, expuestas en `/metrics` (formato Prometheus) |
 | Documentación API | OpenAPI 3.0 vía `@fastify/swagger` + `@fastify/swagger-ui` en `/documentation` |
-| CI/CD | GitHub Actions — 2 pipelines independientes |
+| CI/CD | GitHub Actions - 2 pipelines independientes |
 | Contenedores | Docker, imágenes publicadas en Artifact Registry (GCP) |
 | Orquestación | Kubernetes (GKE) para la API, Cloud Run para el orquestador |
 | Mensajería asíncrona | Google Cloud Pub/Sub |
 
 ## Endpoints
 
-### API v1 — CRUD de entidades
+### API v1 - CRUD de entidades
 
 | Recurso | Métodos | Notas |
 |---|---|---|
@@ -103,7 +103,7 @@ Todos los payloads se validan contra JSON Schema (AJV, vía Fastify). Las violac
 
 ### El verbo QUERY
 
-`QUERY` no es un verbo HTTP estándar en Node — se habilita explícitamente en `src/app.js`:
+`QUERY` no es un verbo HTTP estándar en Node - se habilita explícitamente en `src/app.js`:
 
 ```js
 const http = require('http');
@@ -114,7 +114,7 @@ if (!http.METHODS.includes('QUERY')) {
 app.addHttpMethod('QUERY', { hasBody: true, overrideExisting: true });
 ```
 
-Esto debe ejecutarse **antes** de registrar cualquier ruta que lo use. A diferencia de `GET` (que no permite body de forma estándar), `QUERY` sí lo permite — por eso se usa para filtros complejos que no caben bien en query-string:
+Esto debe ejecutarse **antes** de registrar cualquier ruta que lo use. A diferencia de `GET` (que no permite body de forma estándar), `QUERY` sí lo permite - por eso se usa para filtros complejos que no caben bien en query-string:
 
 ```bash
 curl -X QUERY http://<host>/notas-medicas \
@@ -122,7 +122,7 @@ curl -X QUERY http://<host>/notas-medicas \
   -d '{"paciente": "Ana", "imagen_id": 3}'
 ```
 
-### API v2 — integración entre pares
+### API v2 - integración entre pares
 
 | Endpoint | Qué hace |
 |---|---|
@@ -144,10 +144,10 @@ curl -X QUERY http://<host>/notas-medicas \
 
 1. Levanta la API (local, test o producción).
 2. Abre `http://<host>/documentation` en el navegador.
-3. Cada endpoint documentado tiene botón **"Try it out"** — completa el body/params según el schema mostrado y ejecuta directamente desde el navegador, sin necesidad de Postman/curl.
+3. Cada endpoint documentado tiene botón **"Try it out"** - completa el body/params según el schema mostrado y ejecuta directamente desde el navegador, sin necesidad de Postman/curl.
 4. El esquema OpenAPI crudo (si lo necesitas para importar a Postman/Insomnia) está en `http://<host>/documentation/json`.
 
-> Nota: el `servers` del spec está configurado como `/` (relativo), así que Swagger UI arma la URL correcta sin importar si estás en local, test o producción — no hay que editarlo al cambiar de ambiente.
+> Nota: el `servers` del spec está configurado como `/` (relativo), así que Swagger UI arma la URL correcta sin importar si estás en local, test o producción - no hay que editarlo al cambiar de ambiente.
 
 ## Ambientes
 
@@ -171,7 +171,7 @@ Checkout → Setup Node → Install deps → Migrar BD (npm run db:migrate)
    → Run tests → Coverage gate (c8) → Build imagen Docker → Deploy
 ```
 
-**Regla de aprobación obligatoria:** si cualquier paso anterior falla (tests con errores, o cobertura por debajo del umbral), GitHub Actions detiene el job automáticamente — el `build` y el `deploy` **nunca se ejecutan**. No hace falta lógica adicional para esto: es el comportamiento por defecto de un job de Actions (cada `step` depende implícitamente de que el anterior haya salido con código 0).
+**Regla de aprobación obligatoria:** si cualquier paso anterior falla (tests con errores, o cobertura por debajo del umbral), GitHub Actions detiene el job automáticamente - el `build` y el `deploy` **nunca se ejecutan**. No hace falta lógica adicional para esto: es el comportamiento por defecto de un job de Actions (cada `step` depende implícitamente de que el anterior haya salido con código 0).
 
 El pipeline de producción (`production.yml`) despliega a GKE: construye la imagen, la publica en Artifact Registry con el tag = SHA del commit, aplica los manifiestos de `k8s/` y actualiza la imagen del Deployment con `kubectl set image` + espera el rollout. Ver el archivo para el detalle completo.
 
@@ -200,9 +200,9 @@ Manifiestos en `k8s/`:
 
 El orquestador (`orchestrator/`) vive en el mismo repo pero se despliega por separado en **Cloud Run** (`orchestrator/cloudbuild.yaml`). Expone:
 
-- `POST /api/v2/flujo` — punto de entrada público, publica un mensaje en Pub/Sub y responde `202` de inmediato (asíncrono).
-- `POST /internal/pubsub` — *push endpoint* interno que Pub/Sub invoca para procesar cada mensaje (llama en cadena a la API de Leonardo, Angel y Juan).
-- `GET /health`, `GET /metrics` — igual que la API principal.
+- `POST /api/v2/flujo` - punto de entrada público, publica un mensaje en Pub/Sub y responde `202` de inmediato (asíncrono).
+- `POST /internal/pubsub` - *push endpoint* interno que Pub/Sub invoca para procesar cada mensaje (llama en cadena a la API de Leonardo, Angel y Juan).
+- `GET /health`, `GET /metrics` - igual que la API principal.
 
 Ver `orchestrator/README.md` (pendiente) para el detalle completo de su arquitectura y variables de entorno.
 
@@ -232,4 +232,4 @@ notas_medicas (id, paciente, contenido, fecha, imagen_id → imagenes.id)
 documentos_generados (id, nombre, tipo, url, fecha_generacion, nota_medica_id → notas_medicas.id)
 ```
 
-Las migraciones **no** se ejecutan automáticamente al iniciar la app — se ejecutan explícitamente con `npm run db:migrate`, tanto en local como en ambos pipelines de CI, antes de correr los tests. Esto mantiene una separación clara entre "levantar el servicio" y "preparar el esquema de la base de datos".
+Las migraciones **no** se ejecutan automáticamente al iniciar la app - se ejecutan explícitamente con `npm run db:migrate`, tanto en local como en ambos pipelines de CI, antes de correr los tests. Esto mantiene una separación clara entre "levantar el servicio" y "preparar el esquema de la base de datos".
