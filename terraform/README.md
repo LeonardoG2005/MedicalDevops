@@ -190,10 +190,12 @@ Después puede recrear los recursos administrados con:
 terraform -chdir=terraform apply
 ```
 
-La recreación no restaura imágenes Docker, datos de la base de datos ni
-secretos. Después de `apply`, vuelva a ejecutar las migraciones, publique la
-imagen y despliegue los manifiestos de Kubernetes si necesita recuperar la
-aplicación completa.
+La recreación no restaura imágenes Docker, datos anteriores de la base de
+datos ni secretos. El pipeline despliega la imagen y ejecuta
+`npm run db:migrate` dentro del pod nuevo después del rollout, usando el
+`DATABASE_URL` sincronizado desde Secret Manager. Si se ejecuta `apply`
+manualmente fuera del pipeline, publique la imagen, despliegue Kubernetes y
+ejecute esa migración desde un pod antes de probar los endpoints.
 
 ## Recursos existentes e importación manual
 
@@ -217,11 +219,13 @@ académico adicional. La alternativa correcta en Terraform es adoptarlos:
 4. revisar que `terraform plan` no proponga cambios destructivos;
 5. solo después permitir el pipeline.
 
-La configuración mantiene GKE, Cloud Run y Secret Manager como `data sources`.
-Artifact Registry, la base de datos lógica de Cloud SQL, el tópico Pub/Sub y
-su suscripción ya están declarados como `resource` y deben importarse una vez
-al estado remoto. El bucket de resultados sí es un recurso creado por
-Terraform y el estado remoto ya existe en GCS.
+La configuración mantiene GKE, Cloud Run, Secret Manager, la instancia de
+Cloud SQL y la DLQ de Pub/Sub como `data sources`. Artifact Registry, la base
+de datos lógica de Cloud SQL, el tópico Pub/Sub y su suscripción están
+declarados como `resource`. El bucket de resultados también es un recurso
+creado por Terraform y el estado remoto existe en GCS. No se consultan como
+`data` los recursos administrados, porque deben poder recrearse después de un
+`terraform destroy`.
 
 Los comandos de adopción, después de revisar la identidad, son:
 
