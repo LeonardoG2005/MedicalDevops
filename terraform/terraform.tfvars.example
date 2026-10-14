@@ -1,0 +1,9 @@
+project_id               = "project-40fc41d1-6899-4ce0-9ef"
+region                   = "us-central1"
+environment              = "academic"
+resource_prefix          = "medical-devops"
+results_bucket_name      = "replace-with-a-globally-unique-bucket-name"
+cloud_run_service_account = "medical-orchestrator-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
+
+Nota : realmente en variables.tf ya existen valores predeterminados.
+El proyecto puede funcionar sin un archivo terraform.tfvars
