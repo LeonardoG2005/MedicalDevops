@@ -124,3 +124,10 @@ jobs:
           kubectl rollout status deployment/medical-documents-api -n default --timeout=300s
           kubectl exec deployment/medical-documents-api -n default -c medical-documents-api -- npm run db:migrate
           kubectl get deployment/medical-documents-api -n default
+      - name: Show rollout diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get deployment/medical-documents-api -n default -o wide
+          kubectl get pods -n default -l app=medical-documents-api -o wide
+          kubectl describe pods -n default -l app=medical-documents-api
+          kubectl get events -n default --sort-by='.lastTimestamp' | tail -n 50

@@ -144,6 +144,17 @@ gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/container.developer"
 ```
 
+Los nodos de GKE también deben poder descargar imágenes privadas desde
+Artifact Registry. En este clúster se utiliza la cuenta de servicio
+predeterminada del proyecto:
+
+```powershell
+$node_sa = "400345348270-compute@developer.gserviceaccount.com"
+gcloud projects add-iam-policy-binding $project `
+  --member="serviceAccount:$node_sa" `
+  --role="roles/artifactregistry.reader"
+```
+
 También debe estar habilitada `cloudresourcemanager.googleapis.com` en el
 proyecto. `roles/storage.admin` es necesario para el bucket administrado y el
 backend; `roles/artifactregistry.admin` permite que Terraform cree o elimine el
