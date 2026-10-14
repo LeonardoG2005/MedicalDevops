@@ -49,10 +49,14 @@ Desde la raíz del repositorio:
 terraform -chdir=terraform init -backend=false
 terraform -chdir=terraform fmt -check
 terraform -chdir=terraform validate
-Copy-Item terraform/terraform.tfvars.example terraform/terraform.tfvars
-# Edite únicamente el nombre globalmente único del bucket.
-terraform -chdir=terraform plan -var-file=terraform.tfvars
+terraform -chdir=terraform plan
 ```
+
+El nombre predeterminado del bucket de resultados es
+`medical-devops-400345348270-results`, que coincide con el recurso del estado
+remoto usado en esta entrega. Si se cambia, debe mantenerse el mismo valor en
+todos los entornos; no use un `terraform.tfvars` local diferente al del
+pipeline.
 
 El estado local no se versiona. El workflow de aplicación usa un backend GCS,
 por lo que debe crear previamente un bucket dedicado de estado. No reutilice
@@ -72,12 +76,21 @@ Configure ese nombre como el secret `TF_STATE_BUCKET` de GitHub. El workflow
 usa el prefijo `medicaldevops/terraform`; así el estado persiste entre runs y
 no se guarda en el repositorio.
 
+Para consultar el mismo estado remoto desde el equipo local:
+
+```powershell
+terraform -chdir=terraform init -reconfigure `
+  -backend-config="bucket=NOMBRE_DEL_BUCKET_DE_ESTADO" `
+  -backend-config="prefix=medicaldevops/terraform"
+terraform -chdir=terraform plan -lock-timeout=5m
+```
+
 ## Aplicar y verificar
 
 La aplicación requiere aprobación explícita y no se ejecuta en cada push:
 
 ```powershell
-terraform -chdir=terraform apply -var-file=terraform.tfvars
+terraform -chdir=terraform apply
 terraform -chdir=terraform output
 gcloud storage ls gs://NOMBRE_DEL_BUCKET
 ```
@@ -146,8 +159,8 @@ environments en repositorios privados.
 Primero revise el estado y el plan de destrucción:
 
 ```powershell
-terraform -chdir=terraform plan -destroy -var-file=terraform.tfvars
-terraform -chdir=terraform destroy -var-file=terraform.tfvars
+terraform -chdir=terraform plan -destroy
+terraform -chdir=terraform destroy
 ```
 
 Esta configuración solo puede destruir el bucket de resultados y su IAM
@@ -155,6 +168,24 @@ administrado. `force_destroy = false` evita borrar objetos silenciosamente;
 vacíe el bucket de forma consciente antes de destruirlo. No ejecute comandos
 `gcloud` de borrado sobre el proyecto, GKE, Cloud SQL, Pub/Sub, Cloud Run,
 Artifact Registry o Secret Manager.
+
+Los recursos existentes adoptados tienen `prevent_destroy = true`; por eso un
+destroy total se detiene en lugar de borrar la base de datos, Artifact
+Registry, tópico o suscripción. Para demostrar el ciclo de destrucción sin
+tocar esos recursos, use únicamente el bucket de resultados:
+
+```powershell
+terraform -chdir=terraform plan -destroy `
+  -target=google_storage_bucket_iam_member.orchestrator_writer[0] `
+  -target=google_storage_bucket.workflow_results
+terraform -chdir=terraform destroy `
+  -target=google_storage_bucket_iam_member.orchestrator_writer[0] `
+  -target=google_storage_bucket.workflow_results
+```
+
+Antes, compruebe que el bucket no tenga objetos. Después puede recrearlo con
+`terraform apply`; el backend remoto, GKE, Cloud SQL, Pub/Sub, Cloud Run y
+Artifact Registry permanecen intactos.
 
 ## Recursos existentes e importación manual
 

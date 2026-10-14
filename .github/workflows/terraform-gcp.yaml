@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/terraform
+      - main
   workflow_dispatch:
     inputs:
       apply_infrastructure:

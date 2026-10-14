@@ -25,7 +25,7 @@ variable "resource_prefix" {
 variable "results_bucket_name" {
   description = "Globally unique bucket name for workflow results and attachments."
   type        = string
-  default     = ""
+  default     = "medical-devops-400345348270-results"
 }
 
 variable "cloud_run_service_account" {
