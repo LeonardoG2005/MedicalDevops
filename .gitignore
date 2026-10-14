@@ -2,3 +2,8 @@
 node_modules/
 coverage/
 .DS_Store
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.*
+terraform/*.tfplan
+terraform/terraform.tfvars

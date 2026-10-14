@@ -1,0 +1,94 @@
+name: Terraform GCP and API deployment
+
+on:
+  push:
+    branches:
+      - feature/terraform
+  workflow_dispatch:
+    inputs:
+      apply_infrastructure:
+        description: "Apply the reviewed Terraform plan"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_IN_AUTOMATION: true
+  GCP_PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  GCP_REGION: us-central1
+  ARTIFACT_REPO: medical-api
+  IMAGE_NAME: medical-documents-api
+  GKE_CLUSTER: medical-devops-gke
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: terraform -chdir=terraform fmt -check -recursive
+      - run: terraform -chdir=terraform init -backend=false
+      - run: terraform -chdir=terraform validate
+      - run: terraform -chdir=terraform plan -input=false -lock=false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --include=dev
+      - run: npm test
+      - run: npm ci --prefix orchestrator
+      - run: npm test --prefix orchestrator
+
+  apply-and-deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.apply_infrastructure == true
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: terraform-apply
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+      - run: terraform -chdir=terraform init -backend=false
+      - run: terraform -chdir=terraform apply -auto-approve -input=false
+      - run: docker build -t "${IMAGE_NAME}:${GITHUB_SHA}" .
+      - run: |
+          image_uri="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" "$image_uri"
+          docker push "$image_uri"
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GCP_REGION }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+      - run: |
+          kubectl apply -f k8s/config-map.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/pod-monitoring.yaml
+          kubectl apply -f k8s/secret-provider-class.yaml
+          kubectl apply -f k8s/secret-sync.yaml
+          kubectl apply -f k8s/service-account.yaml
+          kubectl apply -f k8s/service.yaml
+          image_uri="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+          kubectl set image deployment/medical-documents-api medical-documents-api="$image_uri" -n default
+          kubectl rollout status deployment/medical-documents-api -n default --timeout=300s
+          kubectl get deployment/medical-documents-api -n default
