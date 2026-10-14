@@ -1,0 +1,11 @@
+project_id               = "project-40fc41d1-6899-4ce0-9ef"
+region                   = "us-central1"
+environment              = "academic"
+resource_prefix          = "medical-devops"
+results_bucket_name      = "replace-with-a-globally-unique-bucket-name"
+cloud_run_service_account = "medical-orchestrator-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
+
+# variables.tf ya contiene valores predeterminados para el proyecto y la
+# region. Este archivo solo es necesario para personalizar la configuracion.
+# Si results_bucket_name queda vacio, storage.tf genera un nombre usando el
+# numero del proyecto.
