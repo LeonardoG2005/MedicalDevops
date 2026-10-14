@@ -102,13 +102,17 @@ o las identidades no coinciden con la infraestructura comprobada.
 
 ## API y Orchestrator
 
-El workflow `terraform-gcp.yaml` valida en pushes a `feature/terraform` y
-solo despliega tras ejecutar manualmente `workflow_dispatch` y aprobar el
-environment protegido `terraform-apply`. La etapa de aplicación de Terraform
-es independiente de la publicación de la imagen. La imagen de la API se
-publica en el Artifact Registry existente y se despliegan los manifiestos
-existentes en el GKE existente. El Orchestrator conserva su despliegue
-independiente mediante `orchestrator/cloudbuild.yaml`.
+El workflow `terraform-gcp.yaml` valida los pushes a `feature/terraform` y
+`main`. Cuando la validación termina correctamente después de un push a
+`main`, el job `apply-and-deploy` continúa automáticamente, sin
+`workflow_dispatch`, sin input manual y sin esperar aprobación de un
+environment. La etapa aplica Terraform, publica la imagen de la API y
+despliega los manifiestos existentes en el GKE existente. El Orchestrator
+conserva su despliegue independiente mediante `orchestrator/cloudbuild.yaml`.
+
+Los pushes a `feature/terraform` ejecutan únicamente validación y pruebas.
+El despliegue automático está limitado a `main` para evitar desplegar cambios
+experimentales antes del merge.
 
 Secretos de GitHub necesarios:
 
@@ -145,14 +149,11 @@ backend; `roles/artifactregistry.writer` publica la imagen; y
 `roles/container.developer` despliega en GKE. Para el bucket de resultados, la
 cuenta de Cloud Run existente recibe únicamente `roles/storage.objectUser`.
 
-El workflow declara `environment: terraform-apply`. En un repositorio privado,
-la opción **Required reviewers** depende del plan de GitHub; si no aparece en
-la configuración del environment, GitHub no puede proporcionar esa aprobación
-manual con el plan actual. En ese caso, conserva `apply_infrastructure` en
-`false` para las ejecuciones normales y ejecuta el despliegue únicamente desde
-`workflow_dispatch` después de revisar el plan. Para tener una aprobación
-forzada por GitHub, se necesita un plan que habilite reglas de protección para
-environments en repositorios privados.
+El workflow no declara un environment protegido para el despliegue automático.
+Por ello, después de un push a `main`, no aparecerá una solicitud de
+autorización en GitHub Actions: el deploy continuará automáticamente si
+`validate` pasa. La protección principal queda en la revisión y merge del pull
+request hacia `main`.
 
 ## Destrucción segura
 

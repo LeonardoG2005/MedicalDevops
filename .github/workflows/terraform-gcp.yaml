@@ -6,12 +6,6 @@ on:
       - feature/terraform
       - main
   workflow_dispatch:
-    inputs:
-      apply_infrastructure:
-        description: "Apply the reviewed Terraform plan"
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -83,10 +77,9 @@ jobs:
       - run: npm test --prefix orchestrator
 
   apply-and-deploy:
-    if: github.event_name == 'workflow_dispatch' && inputs.apply_infrastructure == true
+    if: github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
-    environment: terraform-apply
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
