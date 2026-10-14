@@ -27,6 +27,23 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: medical_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d medical_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medical_test
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -54,7 +71,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --include=dev
-      - run: npm test
+      - run: node --test --test-concurrency=1 test/*.test.js
       - run: npm ci --prefix orchestrator
       - run: npm test --prefix orchestrator
 

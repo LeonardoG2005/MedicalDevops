@@ -18,7 +18,7 @@ const withServer = async (handler, callback) => {
 test('GET client forwards X-Trace-Id', async () => {
   await withServer((request, response) => {
     assert.equal(request.headers['x-trace-id'], 'trace-abc');
-    assert.equal(request.headers.traceparent, undefined);
+    assert.equal(request.headers.traceparent, 'trace-abc');
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true }));
   }, async (url) => {
