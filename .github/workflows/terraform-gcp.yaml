@@ -39,9 +39,16 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
       - run: terraform -chdir=terraform fmt -check -recursive
-      - run: terraform -chdir=terraform init -backend=false
+      - name: Initialize Terraform remote state
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          test -n "$TF_STATE_BUCKET"
+          terraform -chdir=terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="prefix=medicaldevops/terraform"
       - run: terraform -chdir=terraform validate
-      - run: terraform -chdir=terraform plan -input=false -lock=false
+      - run: terraform -chdir=terraform plan -input=false -lock-timeout=5m
       - uses: actions/setup-node@v4
         with:
           node-version: 22
