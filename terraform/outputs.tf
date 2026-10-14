@@ -5,7 +5,7 @@ output "results_bucket" {
 
 output "artifact_registry_repository" {
   description = "Existing Artifact Registry repository reused by the pipelines."
-  value       = data.google_artifact_registry_repository.api.name
+  value       = google_artifact_registry_repository.api.name
 }
 
 output "gke_cluster" {
@@ -20,12 +20,12 @@ output "cloud_sql_instance" {
 
 output "cloud_sql_database" {
   description = "Existing application database; credentials remain in Secret Manager."
-  value       = data.google_sql_database.application.name
+  value       = google_sql_database.application.name
 }
 
 output "pubsub_subscription" {
   description = "Existing Orchestrator event subscription."
-  value       = data.google_pubsub_subscription.events.name
+  value       = google_pubsub_subscription.events.name
 }
 
 output "dead_letter_subscription" {

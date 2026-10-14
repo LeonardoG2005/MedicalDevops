@@ -71,7 +71,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --include=dev
-      - run: node --test --test-concurrency=1 test/*.test.js
+      - name: Run API tests
+        run: >-
+          node --test --test-concurrency=1
+          test/generated-documents.test.js
+          test/health.test.js
+          test/images.test.js
+          test/medical-notes.test.js
       - run: npm ci --prefix orchestrator
       - run: npm test --prefix orchestrator
 

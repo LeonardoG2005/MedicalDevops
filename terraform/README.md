@@ -164,6 +164,50 @@ identidad, añadir un bloque `resource` equivalente y ejecutar manualmente el
 import correspondiente (`terraform import`). Nunca se importa o modifica un
 recurso automáticamente desde CI.
 
+## Por qué no se borran los recursos existentes
+
+El repositorio de referencia administra una infraestructura nueva de AWS
+(VPC, RDS, ECS, ECR, ALB, CloudWatch y Secrets Manager). En este proyecto los
+servicios equivalentes de GCP ya están en uso por la API y el Orchestrator.
+Borrarlos para recrearlos introduciría una interrupción y no aporta valor
+académico adicional. La alternativa correcta en Terraform es adoptarlos:
+
+1. comprobar la identidad exacta del recurso;
+2. declarar un bloque `resource` con su configuración real;
+3. ejecutar `terraform import` manualmente;
+4. revisar que `terraform plan` no proponga cambios destructivos;
+5. solo después permitir el pipeline.
+
+La configuración mantiene GKE, Cloud Run y Secret Manager como `data sources`.
+Artifact Registry, la base de datos lógica de Cloud SQL, el tópico Pub/Sub y
+su suscripción ya están declarados como `resource` y deben importarse una vez
+al estado remoto. El bucket de resultados sí es un recurso creado por
+Terraform y el estado remoto ya existe en GCS.
+
+Los comandos de adopción, después de revisar la identidad, son:
+
+```powershell
+terraform -chdir=terraform import `
+  google_artifact_registry_repository.api `
+  projects/project-40fc41d1-6899-4ce0-9ef/locations/us-central1/repositories/medical-api
+
+terraform -chdir=terraform import `
+  google_sql_database.application `
+  project-40fc41d1-6899-4ce0-9ef/medical-devops-db/medical_devops
+
+terraform -chdir=terraform import `
+  google_pubsub_topic.events `
+  projects/project-40fc41d1-6899-4ce0-9ef/topics/medical-orchestrator-events
+
+terraform -chdir=terraform import `
+  google_pubsub_subscription.events `
+  projects/project-40fc41d1-6899-4ce0-9ef/subscriptions/medical-orchestrator-events-sub
+```
+
+Después de importar, ejecute `terraform plan` y no continúe si propone
+destruir o cambiar datos. No se importa el clúster GKE ni la instancia
+completa de Cloud SQL sin comparar toda su configuración.
+
 ## Costos y límites
 
 El bucket tiene versionado y elimina objetos de más de 30 días; el versionado
