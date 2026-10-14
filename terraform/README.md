@@ -54,10 +54,23 @@ Copy-Item terraform/terraform.tfvars.example terraform/terraform.tfvars
 terraform -chdir=terraform plan -var-file=terraform.tfvars
 ```
 
-El estado local no se versiona. Para un equipo, cree previamente un bucket
-dedicado de estado con retención/versionado y use un backend GCS. No reutilice
+El estado local no se versiona. El workflow de aplicación usa un backend GCS,
+por lo que debe crear previamente un bucket dedicado de estado. No reutilice
 el bucket de resultados. La creación del bucket de estado queda fuera de esta
-configuración para no generar un ciclo de bootstrap.
+configuración para no generar un ciclo de bootstrap:
+
+```powershell
+gcloud storage buckets create gs://NOMBRE_UNICO_DEL_BUCKET_DE_ESTADO `
+  --project=project-40fc41d1-6899-4ce0-9ef `
+  --location=us-central1 `
+  --uniform-bucket-level-access
+gcloud storage buckets update gs://NOMBRE_UNICO_DEL_BUCKET_DE_ESTADO `
+  --versioning
+```
+
+Configure ese nombre como el secret `TF_STATE_BUCKET` de GitHub. El workflow
+usa el prefijo `medicaldevops/terraform`; así el estado persiste entre runs y
+no se guarda en el repositorio.
 
 ## Aplicar y verificar
 
@@ -89,14 +102,44 @@ Secretos de GitHub necesarios:
 - `GCP_WIF_PROVIDER`: el nombre completo del proveedor WIF existente.
 - `GCP_DEPLOYER_SERVICE_ACCOUNT`: normalmente
   `github-actions-deployer@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com`.
+- `TF_STATE_BUCKET`: nombre del bucket GCS dedicado para el estado remoto,
+  sin el prefijo `gs://`.
 
-El proveedor WIF debe restringir el repositorio y la rama. La cuenta necesita,
-como mínimo, `roles/storage.admin` para el bucket de Terraform, `roles/
-serviceusage.serviceUsageAdmin` si habilita APIs, `roles/artifactregistry.writer`
-para publicar la imagen, `roles/container.developer` para el despliegue GKE,
-`roles/container.clusterViewer` para obtener credenciales y permisos de
-Terraform sobre los recursos que se vayan a administrar. Para el bucket, la
+El proveedor WIF debe restringir el repositorio y la rama. Para corregir los
+`403` del pipeline, un administrador debe conceder a la cuenta federada estos
+permisos de proyecto:
+
+```powershell
+$project = "project-40fc41d1-6899-4ce0-9ef"
+$sa = "github-actions-deployer@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/browser"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/serviceusage.serviceUsageAdmin"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/cloudsql.viewer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/pubsub.viewer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/secretmanager.viewer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/artifactregistry.reader"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/container.clusterViewer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/iam.serviceAccountViewer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/storage.admin"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/artifactregistry.writer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/container.developer"
+```
+
+También debe estar habilitada `cloudresourcemanager.googleapis.com` en el
+proyecto. `roles/storage.admin` es necesario para el bucket administrado y el
+backend; `roles/artifactregistry.writer` publica la imagen; y
+`roles/container.developer` despliega en GKE. Para el bucket de resultados, la
 cuenta de Cloud Run existente recibe únicamente `roles/storage.objectUser`.
+
+El workflow declara `environment: terraform-apply`. En un repositorio privado,
+la opción **Required reviewers** depende del plan de GitHub; si no aparece en
+la configuración del environment, GitHub no puede proporcionar esa aprobación
+manual con el plan actual. En ese caso, conserva `apply_infrastructure` en
+`false` para las ejecuciones normales y ejecuta el despliegue únicamente desde
+`workflow_dispatch` después de revisar el plan. Para tener una aprobación
+forzada por GitHub, se necesita un plan que habilite reglas de protección para
+environments en repositorios privados.
 
 ## Destrucción segura
 

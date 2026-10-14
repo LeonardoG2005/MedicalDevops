@@ -8,6 +8,7 @@ locals {
     "storage.googleapis.com",
     "pubsub.googleapis.com",
     "container.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
   ])
 }
 
