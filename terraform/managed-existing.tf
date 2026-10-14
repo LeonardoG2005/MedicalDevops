@@ -4,10 +4,6 @@ resource "google_artifact_registry_repository" "api" {
   repository_id = "medical-api"
   description   = "Medical Documents API container images"
   format        = "DOCKER"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "google_sql_database" "application" {
@@ -16,19 +12,11 @@ resource "google_sql_database" "application" {
   project   = var.project_id
   charset   = "UTF8"
   collation = "en_US.UTF8"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "google_pubsub_topic" "events" {
   name    = "medical-orchestrator-events"
   project = var.project_id
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "google_pubsub_subscription" "events" {
@@ -56,9 +44,5 @@ resource "google_pubsub_subscription" "events" {
   dead_letter_policy {
     dead_letter_topic     = "projects/${var.project_id}/topics/medical-orchestrator-events-dlq"
     max_delivery_attempts = 5
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 }

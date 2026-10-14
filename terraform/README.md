@@ -163,29 +163,36 @@ terraform -chdir=terraform plan -destroy
 terraform -chdir=terraform destroy
 ```
 
-Esta configuración solo puede destruir el bucket de resultados y su IAM
-administrado. `force_destroy = false` evita borrar objetos silenciosamente;
-vacíe el bucket de forma consciente antes de destruirlo. No ejecute comandos
-`gcloud` de borrado sobre el proyecto, GKE, Cloud SQL, Pub/Sub, Cloud Run,
-Artifact Registry o Secret Manager.
+Esta configuración puede destruir los recursos declarados como `resource`,
+incluidos la base de datos lógica, Artifact Registry, Pub/Sub y el bucket de
+resultados. `force_destroy = false` evita borrar objetos silenciosamente;
+vacíe los buckets de forma consciente antes de destruirlos. Los recursos
+consultados con `data` (GKE, Cloud Run, Secret Manager e instancia de Cloud
+SQL) no se destruyen porque no forman parte del estado administrado.
 
-Los recursos existentes adoptados tienen `prevent_destroy = true`; por eso un
-destroy total se detiene en lugar de borrar la base de datos, Artifact
-Registry, tópico o suscripción. Para demostrar el ciclo de destrucción sin
-tocar esos recursos, use únicamente el bucket de resultados:
+Para demostrar el ciclo completo de la entrega:
 
 ```powershell
-terraform -chdir=terraform plan -destroy `
-  -target=google_storage_bucket_iam_member.orchestrator_writer[0] `
-  -target=google_storage_bucket.workflow_results
-terraform -chdir=terraform destroy `
-  -target=google_storage_bucket_iam_member.orchestrator_writer[0] `
-  -target=google_storage_bucket.workflow_results
+terraform -chdir=terraform plan -destroy
+terraform -chdir=terraform destroy
 ```
 
-Antes, compruebe que el bucket no tenga objetos. Después puede recrearlo con
-`terraform apply`; el backend remoto, GKE, Cloud SQL, Pub/Sub, Cloud Run y
-Artifact Registry permanecen intactos.
+Antes, compruebe que los buckets no tengan objetos y guarde las evidencias
+necesarias. El destroy elimina la base de datos lógica, el repositorio de
+imágenes, el tópico, la suscripción, el bucket de resultados, su IAM y las
+APIs administradas por esta configuración. No elimina la instancia completa
+de Cloud SQL, GKE, Cloud Run, Secret Manager ni el bucket remoto de estado.
+
+Después puede recrear los recursos administrados con:
+
+```powershell
+terraform -chdir=terraform apply
+```
+
+La recreación no restaura imágenes Docker, datos de la base de datos ni
+secretos. Después de `apply`, vuelva a ejecutar las migraciones, publique la
+imagen y despliegue los manifiestos de Kubernetes si necesita recuperar la
+aplicación completa.
 
 ## Recursos existentes e importación manual
 
@@ -236,8 +243,10 @@ terraform -chdir=terraform import `
 ```
 
 Después de importar, ejecute `terraform plan` y no continúe si propone
-destruir o cambiar datos. No se importa el clúster GKE ni la instancia
-completa de Cloud SQL sin comparar toda su configuración.
+destruir o cambiar datos antes de la demostración. Estos recursos se pueden
+destruir durante el ejercicio porque se retiró `prevent_destroy`; el objetivo
+es demostrar el ciclo completo y recrearlos después. No se importa el clúster
+GKE ni la instancia completa de Cloud SQL.
 
 ## Costos y límites
 
