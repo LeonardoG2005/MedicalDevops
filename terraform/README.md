@@ -135,19 +135,27 @@ gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/cloudsql.viewer"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/pubsub.viewer"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/secretmanager.viewer"
-gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/artifactregistry.reader"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/artifactregistry.admin"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/container.clusterViewer"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/iam.serviceAccountViewer"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/storage.admin"
-gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/artifactregistry.writer"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/cloudsql.editor"
+gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/pubsub.editor"
 gcloud projects add-iam-policy-binding $project --member="serviceAccount:$sa" --role="roles/container.developer"
 ```
 
 También debe estar habilitada `cloudresourcemanager.googleapis.com` en el
 proyecto. `roles/storage.admin` es necesario para el bucket administrado y el
-backend; `roles/artifactregistry.writer` publica la imagen; y
-`roles/container.developer` despliega en GKE. Para el bucket de resultados, la
-cuenta de Cloud Run existente recibe únicamente `roles/storage.objectUser`.
+backend; `roles/artifactregistry.admin` permite que Terraform cree o elimine el
+repositorio y también publicar la imagen; `roles/cloudsql.editor` permite crear
+o eliminar la base de datos lógica dentro de la instancia existente;
+`roles/pubsub.editor` permite crear o eliminar el tópico y la suscripción; y
+`roles/container.developer` despliega en GKE. Si se prefiere separar las
+responsabilidades, `roles/artifactregistry.admin` puede reemplazarse por
+`roles/artifactregistry.writer` más un rol personalizado que contenga
+`artifactregistry.repositories.create` y `artifactregistry.repositories.delete`.
+Para el bucket de resultados, la cuenta de Cloud Run existente recibe
+únicamente `roles/storage.objectUser`.
 
 El workflow no declara un environment protegido para el despliegue automático.
 Por ello, después de un push a `main`, no aparecerá una solicitud de
