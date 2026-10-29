@@ -13,10 +13,12 @@ const notasMedicasRoutes = require('./routes/medical-notes.routes');
 const documentosGeneradosRoutes = require('./routes/generated-documents.routes');
 const v2Routes = require('./v2/routes');
 const { createMetrics } = require('./services/metrics');
+const { getRuntimeInfo, registerVersionHeaders } = require('./version');
 
 async function buildApp(options = {}) {
   const app = Fastify({ logger: true });
   const metrics = options.metrics || createMetrics();
+  registerVersionHeaders(app);
   metrics.registerRequestHooks(app);
 
   app.setErrorHandler((error, request, reply) => {
@@ -88,11 +90,13 @@ async function buildApp(options = {}) {
           type: 'object',
           properties: {
             status: { type: 'string' },
+            version: { type: 'string' },
+            track: { type: 'string' },
           },
         },
       },
     },
-  }, async () => ({ status: 'ok' }));
+  }, async () => ({ status: 'ok', ...getRuntimeInfo() }));
 
   await app.register(imagenesRoutes);
   await app.register(notasMedicasRoutes);
