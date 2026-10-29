@@ -4,16 +4,24 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
-const MIGRATION_FILE = path.join(__dirname, '..', 'supabase', 'migrations', '001_initial_schema.sql');
+const MIGRATIONS_DIR = path.join(__dirname, '..', 'supabase', 'migrations');
 
-async function runMigration() {
+// Files run in name order (001, 002, ...). Every migration is idempotent and
+// only adds things, so running the whole list again is safe.
+function listMigrations() {
+  return fs.readdirSync(MIGRATIONS_DIR)
+    .filter((file) => file.endsWith('.sql'))
+    .sort()
+    .map((file) => path.join(MIGRATIONS_DIR, file));
+}
+
+async function runMigrations() {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required. Configure the database connection in the environment.');
   }
 
-  const migrationSql = fs.readFileSync(MIGRATION_FILE, 'utf8');
   const isSupabase = databaseUrl.includes('supabase.com');
 
   const pool = new Pool({
@@ -22,15 +30,21 @@ async function runMigration() {
   });
 
   try {
-    console.log(`Ejecutando migración: ${path.basename(MIGRATION_FILE)}`);
-    await pool.query(migrationSql);
-    console.log('Migración completada correctamente.');
+    for (const file of listMigrations()) {
+      console.log(`Ejecutando migración: ${path.basename(file)}`);
+      await pool.query(fs.readFileSync(file, 'utf8'));
+    }
+    console.log('Migraciones completadas correctamente.');
   } finally {
     await pool.end();
   }
 }
 
-runMigration().catch((error) => {
-  console.error('Error al ejecutar la migración:', error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  runMigrations().catch((error) => {
+    console.error('Error al ejecutar las migraciones:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { listMigrations };

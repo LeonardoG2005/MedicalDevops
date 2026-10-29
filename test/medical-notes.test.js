@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildApp } = require('../src/app');
-const { resetDatabase, createImage } = require('./helpers');
+const { pool, resetDatabase, createImage } = require('./helpers');
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -233,4 +233,20 @@ test('Nota médica: cada intento de registro alimenta la métrica de negocio', a
   const metrics = await app.inject({ method: 'GET', url: '/metrics' });
   assert.match(metrics.body, /medical_notes_registered_total\{[^}]*resultado="registrada"[^}]*track="stable"[^}]*\} 1/);
   assert.match(metrics.body, /medical_notes_registered_total\{[^}]*resultado="rechazada"[^}]*\} 1/);
+});
+
+test('Nota médica: tras el Expand, la ruta v1 sigue creando notas sin prioridad', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/notas-medicas',
+    payload: { paciente: 'Paciente 020', contenido: 'Sin cambios.', fecha: '2026-08-16', imagen_id: image.id },
+  });
+
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().prioridad, undefined);
+  const row = await pool.query('SELECT prioridad FROM notas_medicas WHERE id = $1', [created.json().id]);
+  assert.equal(row.rows[0].prioridad, null);
 });
