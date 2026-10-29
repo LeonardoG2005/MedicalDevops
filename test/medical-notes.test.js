@@ -219,3 +219,18 @@ test('Nota médica: validación de datos inválidos devuelve 400', async () => {
   });
   assert.equal(response.statusCode, 400);
 });
+test('Nota médica: cada intento de registro alimenta la métrica de negocio', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+
+  await app.inject({
+    method: 'POST',
+    url: '/notas-medicas',
+    payload: { paciente: 'Paciente 010', contenido: 'Control.', fecha: '2026-08-16', imagen_id: image.id },
+  });
+  await app.inject({ method: 'POST', url: '/notas-medicas', payload: { paciente: 'Sin datos' } });
+
+  const metrics = await app.inject({ method: 'GET', url: '/metrics' });
+  assert.match(metrics.body, /medical_notes_registered_total\{[^}]*resultado="registrada"[^}]*track="stable"[^}]*\} 1/);
+  assert.match(metrics.body, /medical_notes_registered_total\{[^}]*resultado="rechazada"[^}]*\} 1/);
+});
