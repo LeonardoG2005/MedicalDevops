@@ -34,6 +34,12 @@ variable "cloud_run_service_account" {
   default     = "medical-orchestrator-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
 }
 
+variable "api_service_account" {
+  description = "Existing service account the API uses, now also on Cloud Run (already has roles/cloudsql.client)."
+  type        = string
+  default     = "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
+}
+
 variable "enable_apis" {
   description = "Enable APIs required by the platform. Set false if project administration is external."
   type        = bool
