@@ -225,4 +225,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = { decide, emptyMeasurement, errorRate, successRate, measure, PROMOTE, PAUSE, ABORT, EXIT_CODES };
+module.exports = {
+  decide, emptyMeasurement, errorRate, successRate, measure, summaryLine,
+  PROMOTE, PAUSE, ABORT, EXIT_CODES,
+};
