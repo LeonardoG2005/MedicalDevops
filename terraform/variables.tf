@@ -40,6 +40,12 @@ variable "api_service_account" {
   default     = "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
 }
 
+variable "servicio_cloud_run" {
+  description = "Cloud Run service name that serves the stable and canary revisions."
+  type        = string
+  default     = "medical-documents-api"
+}
+
 variable "enable_apis" {
   description = "Enable APIs required by the platform. Set false if project administration is external."
   type        = bool
