@@ -5,7 +5,7 @@ const { emptyMeasurement } = require('../canary/gate');
 const slo = require('../canary/slo.json');
 
 function healthyMeasurement() {
-  return { ...emptyMeasurement(), requests: 200, p95Ms: 400, p99Ms: 600, registered: 20 };
+  return { ...emptyMeasurement(), requests: 400, p95Ms: 400, p99Ms: 600, registered: 20 };
 }
 
 function fakeEnv(measurements) {
@@ -38,7 +38,7 @@ test('promueve hasta el 100% cuando todas las etapas pasan', async () => {
 });
 
 test('aborta y revierte el tráfico cuando una etapa falla', async () => {
-  const unhealthy = { canary: { ...emptyMeasurement(), requests: 200, errors5xx: 30 }, stable: healthyMeasurement() };
+  const unhealthy = { canary: { ...emptyMeasurement(), requests: 400, errors5xx: 30 }, stable: healthyMeasurement() };
   const { env, calls } = fakeEnv([unhealthy]);
 
   const code = await promote(slo, [10, 50, 100], 1, 1, 'canary-rev', 'stable-rev', env, () => {});

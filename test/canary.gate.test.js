@@ -4,7 +4,7 @@ const { decide, emptyMeasurement, PROMOTE, PAUSE, ABORT } = require('../canary/g
 const slo = require('../canary/slo.json');
 
 function measurement(overrides = {}) {
-  return { ...emptyMeasurement(), requests: 200, ...overrides };
+  return { ...emptyMeasurement(), requests: 400, ...overrides };
 }
 
 test('PAUSA cuando el canary no tiene suficientes peticiones', () => {
@@ -21,14 +21,14 @@ test('PROMUEVE cuando el canary cumple todos los umbrales', () => {
 });
 
 test('ABORTA cuando la tasa de errores 5xx supera el límite de aborto', () => {
-  const canary = measurement({ errors5xx: 15 });
+  const canary = measurement({ errors5xx: 30 });
   const { decision, reasons } = decide(slo, canary, measurement());
   assert.equal(decision, ABORT);
   assert.match(reasons.join(' '), /5xx/);
 });
 
 test('PAUSA (no aborta) con errores por encima de promover pero por debajo de abortar', () => {
-  const canary = measurement({ errors5xx: 3 });
+  const canary = measurement({ errors5xx: 8 });
   const { decision } = decide(slo, canary, measurement());
   assert.equal(decision, PAUSE);
 });
