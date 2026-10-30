@@ -7,12 +7,6 @@ data "google_sql_database_instance" "production" {
   project = var.project_id
 }
 
-data "google_container_cluster" "gke" {
-  name     = "medical-devops-gke"
-  location = var.region
-  project  = var.project_id
-}
-
 data "google_pubsub_topic" "dead_letter" {
   name    = "medical-orchestrator-events-dlq"
   project = var.project_id
