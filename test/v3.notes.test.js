@@ -95,3 +95,34 @@ test('V3: PATCH de prioridad sobre un id inexistente devuelve 404', async () => 
 
   assert.equal(response.statusCode, 404);
 });
+
+test('V3: resumen de una imagen cuenta notas, documentos y la prioridad máxima', async () => {
+  const app = await buildApp();
+  const image = await createImage();
+
+  const nota1 = await app.inject({ method: 'POST', url: '/api/v3/notas-medicas', payload: {
+    paciente: 'A', contenido: 'Leve.', fecha: '2026-08-16', imagen_id: image.id, prioridad: 'baja',
+  } });
+  await app.inject({ method: 'POST', url: '/api/v3/notas-medicas', payload: {
+    paciente: 'B', contenido: 'Grave.', fecha: '2026-08-16', imagen_id: image.id, prioridad: 'critica',
+  } });
+  await app.inject({ method: 'POST', url: '/documentos-generados', payload: {
+    nombre: 'reporte.pdf', tipo: 'PDF', url: 'https://example.com/r.pdf',
+    fecha_generacion: '2026-08-16', nota_medica_id: nota1.json().id,
+  } });
+
+  const resumen = await app.inject({ method: 'GET', url: `/api/v3/imagenes/${image.id}/resumen` });
+
+  assert.equal(resumen.statusCode, 200);
+  assert.deepEqual(resumen.json(), {
+    imagen_id: image.id, notas_totales: 2, prioridad_maxima: 'critica', documentos_totales: 1,
+  });
+});
+
+test('V3: resumen de una imagen inexistente devuelve 404', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({ method: 'GET', url: '/api/v3/imagenes/999/resumen' });
+
+  assert.equal(response.statusCode, 404);
+});
