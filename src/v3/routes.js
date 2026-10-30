@@ -3,6 +3,7 @@ const {
   createNotaMedicaV3,
   setPrioridad,
 } = require('./notes.controller');
+const { getResumenImagen } = require('./resumen.controller');
 const {
   prioridadSchema,
   notaMedicaV3Schema,
@@ -46,6 +47,31 @@ async function v3Routes(app) {
       return reply.code(404).send({ error: 'Nota médica no encontrada' });
     }
     return nota;
+  });
+
+  app.get('/api/v3/imagenes/:id/resumen', {
+    schema: {
+      tags: ['V3'],
+      params: idParamSchema,
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            imagen_id: { type: 'integer' },
+            notas_totales: { type: 'integer' },
+            prioridad_maxima: { type: ['string', 'null'] },
+            documentos_totales: { type: 'integer' },
+          },
+        },
+        404: errorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const resumen = await getResumenImagen(request.params.id);
+    if (!resumen) {
+      return reply.code(404).send({ error: 'Imagen no encontrada' });
+    }
+    return resumen;
   });
 }
 
