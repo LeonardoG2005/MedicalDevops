@@ -15,11 +15,13 @@ const v2Routes = require('./v2/routes');
 const v3Routes = require('./v3/routes');
 const { createMetrics } = require('./services/metrics');
 const { getRuntimeInfo, registerVersionHeaders } = require('./version');
+const { registerFaultInjection } = require('./fault-injection');
 
 async function buildApp(options = {}) {
   const app = Fastify({ logger: true });
   const metrics = options.metrics || createMetrics();
   registerVersionHeaders(app);
+  registerFaultInjection(app);
   metrics.registerRequestHooks(app);
 
   app.setErrorHandler((error, request, reply) => {
