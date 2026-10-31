@@ -90,20 +90,29 @@ async function businessCycle(url, headers, outcomes, imagenId) {
   outcomes.push(await request(url, '/api/v3/notas-medicas', headers, 'POST', payload));
 }
 
-async function ensureImagen(url, headers) {
-  const outcome = await request(url, '/imagenes', headers, 'POST', {
-    nombre: 'imagen-canary-load.jpg',
-    url: 'https://example.com/imagen-canary-load.jpg',
-    fecha_creacion: new Date().toISOString().slice(0, 10),
+// The business cycle needs a real image id: production ids are not known in
+// advance, so the run creates its own image first and uses that one.
+async function ensureImagen(url) {
+  const response = await fetch(`${url}/imagenes`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      nombre: 'imagen-canary-load.jpg',
+      url: 'https://example.com/imagen-canary-load.jpg',
+      fecha_creacion: new Date().toISOString().slice(0, 10),
+    }),
   });
-  return outcome;
+  if (!response.ok) {
+    throw new Error(`Could not create the load test image: HTTP ${response.status}`);
+  }
+  return (await response.json()).id;
 }
 
 function headersFor(fault) {
   return fault ? { 'x-fault': fault } : {};
 }
 
-async function run({ url, durationSeconds, threads, fault, businessEvery }) {
+async function run({ url, durationSeconds, threads, fault, businessEvery, imagenId }) {
   const headers = headersFor(fault);
   const outcomes = [];
   const deadline = Date.now() + durationSeconds * 1000;
@@ -113,7 +122,7 @@ async function run({ url, durationSeconds, threads, fault, businessEvery }) {
     while (Date.now() < deadline) {
       cycles += 1;
       if (businessEvery > 0 && cycles % businessEvery === 0) {
-        await businessCycle(url, headers, outcomes, 1);
+        await businessCycle(url, headers, outcomes, imagenId);
       } else {
         await readCycle(url, headers, outcomes);
       }
@@ -141,13 +150,14 @@ async function main() {
     process.exit(1);
   }
 
-  await ensureImagen(args.url, headersFor(args.fault));
+  const imagenId = await ensureImagen(args.url);
   const outcomes = await run({
     url: args.url,
     durationSeconds: Number(args.duration),
     threads: Number(args.threads),
     fault: args.fault,
     businessEvery: Number(args['business-every']),
+    imagenId,
   });
   printSummary(outcomes, Number(args.duration));
 }
