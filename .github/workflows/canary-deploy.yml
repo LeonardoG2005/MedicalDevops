@@ -1,0 +1,74 @@
+name: Canary v4 - Desplegar al 0 %
+
+# Manual: builds both images, applies the Expand migration and leaves the
+# canary revision deployed without public traffic (stage 0). Promotion is a
+# separate workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      ref_stable:
+        description: "Tag o rama de la version estable (solo se usa si el servicio aun no existe)"
+        default: "v3.1.0"
+        required: true
+      ref_canary:
+        description: "Tag o rama de la version canary"
+        default: "main"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  REGION: us-central1
+  SERVICE: medical-documents-api
+  REPOSITORY: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-documents-api
+  API_ACCOUNT: medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com
+  SQL_CONNECTION: project-40fc41d1-6899-4ce0-9ef:us-central1:medical-devops-db
+  SECRETS: DATABASE_URL=medical-api-database-url-cloudrun:latest,API_A_URL=medical-api-api-a-url:latest,API_C_URL=medical-api-api-c-url:latest
+
+jobs:
+  images:
+    name: Construir imagenes por digest
+    runs-on: ubuntu-latest
+    outputs:
+      image_stable: ${{ steps.stable.outputs.image }}
+      sha_stable: ${{ steps.stable.outputs.sha }}
+      image_canary: ${{ steps.canary.outputs.image }}
+      sha_canary: ${{ steps.canary.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_stable }}
+          path: stable-src
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_canary }}
+          path: canary-src
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      # Deploy by digest (sha256), not by tag: a tag can move, a digest always
+      # points to exactly the same image
+      - name: Imagen estable
+        id: stable
+        run: |
+          SHA=$(git -C stable-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORY:stable-$SHA" stable-src
+          docker push "$REPOSITORY:stable-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "image=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORY:stable-$SHA")" >> "$GITHUB_OUTPUT"
+      - name: Imagen canary
+        id: canary
+        run: |
+          SHA=$(git -C canary-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORY:canary-$SHA" canary-src
+          docker push "$REPOSITORY:canary-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "image=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORY:canary-$SHA")" >> "$GITHUB_OUTPUT"
