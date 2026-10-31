@@ -147,3 +147,34 @@ jobs:
             --revision-suffix="$SUFFIX" --tag=canary --no-traffic
           echo "revision=$SERVICE-$SUFFIX" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Stage 0: the canary answers on its tagged revision URL and the public
+      # keeps landing on the stable one. If any check fails, do not promote.
+      - name: Prueba de humo de la etapa 0
+        env:
+          CANARY: ${{ steps.canary.outputs.revision }}
+        run: |
+          DATA=$(gcloud run services describe $SERVICE --region=$REGION --format=json)
+          PUBLIC=$(echo "$DATA" | jq -r '.status.url')
+          CANARY_URL=$(echo "$DATA" | jq -r '.status.traffic[] | select(.tag=="canary") | .url')
+
+          echo "Canary por su URL de revision:"
+          curl -fsS -D - "$CANARY_URL/health" | tee /tmp/canary.txt
+          grep -qi "x-track: canary" /tmp/canary.txt
+          curl -fsS -o /dev/null "$CANARY_URL/api/v3/notas-medicas"
+
+          echo "El publico no debe ver el canary:"
+          for i in $(seq 1 10); do curl -fsS -D - -o /dev/null "$PUBLIC/health" | grep -i "^x-track"; done | sort | uniq -c
+          ! curl -fsS -D - -o /dev/null "$PUBLIC/health" | grep -qi "x-track: canary"
+
+          {
+            echo "### Canary desplegado al 0 %"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Servicio publico | $PUBLIC |"
+            echo "| URL de revision del canary | $CANARY_URL |"
+            echo "| Revision estable | ${{ steps.stable.outputs.revision }} |"
+            echo "| Revision canary | $CANARY |"
+            echo "| Version canary | ${{ steps.canary.outputs.version }} |"
+            echo "| Imagen canary | ${{ needs.images.outputs.image_canary }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
