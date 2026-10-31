@@ -72,3 +72,78 @@ jobs:
           docker push "$REPOSITORY:canary-$SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "image=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORY:canary-$SHA")" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Migrar y desplegar revisiones
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # If the service exists, the baseline is the revision serving 100 % today.
+      # If not, the stable one is created: migrate to its schema, then deploy.
+      # Migrations run as a Cloud Run job with the same image, account and
+      # secret, so the database password never leaves GCP.
+      - name: Revision estable (linea base)
+        id: stable
+        env:
+          IMAGE: ${{ needs.images.outputs.image_stable }}
+          SHA: ${{ needs.images.outputs.sha_stable }}
+          REF: ${{ inputs.ref_stable }}
+        run: |
+          if gcloud run services describe $SERVICE --region=$REGION >/dev/null 2>&1; then
+            BASE=$(gcloud run services describe $SERVICE --region=$REGION --format=json \
+              | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
+          else
+            gcloud run jobs deploy medical-api-migrate --region=$REGION --image="$IMAGE" \
+              --service-account=$API_ACCOUNT --set-cloudsql-instances=$SQL_CONNECTION \
+              --set-secrets=DATABASE_URL=medical-api-database-url-cloudrun:latest \
+              --command=node --args=scripts/migrate.js --max-retries=0 --task-timeout=300
+            gcloud run jobs execute medical-api-migrate --region=$REGION --wait
+            gcloud run deploy $SERVICE --region=$REGION --image="$IMAGE" \
+              --service-account=$API_ACCOUNT --add-cloudsql-instances=$SQL_CONNECTION \
+              --set-secrets="$SECRETS" --port=3000 \
+              --set-env-vars="APP_VERSION=${REF#v},TRACK=stable,NODE_ENV=production,OTEL_SDK_DISABLED=true" \
+              --allow-unauthenticated --min-instances=1 --max-instances=4 --cpu=1 --memory=512Mi \
+              --revision-suffix="stable-$SHA"
+            BASE="$SERVICE-stable-$SHA"
+          fi
+          gcloud run services update-traffic $SERVICE --region=$REGION --update-tags="stable=$BASE"
+          echo "revision=$BASE" >> "$GITHUB_OUTPUT"
+
+      # Expand phase: with the canary image the migration only adds nullable
+      # columns, so the stable revision keeps working meanwhile
+      - name: Migracion Expand con la imagen canary
+        env:
+          IMAGE: ${{ needs.images.outputs.image_canary }}
+        run: |
+          gcloud run jobs deploy medical-api-migrate --region=$REGION --image="$IMAGE" \
+            --service-account=$API_ACCOUNT --set-cloudsql-instances=$SQL_CONNECTION \
+            --set-secrets=DATABASE_URL=medical-api-database-url-cloudrun:latest \
+            --command=node --args=scripts/migrate.js --max-retries=0 --task-timeout=300
+          gcloud run jobs execute medical-api-migrate --region=$REGION --wait
+
+      # --no-traffic: the revision is deployed but the public never reaches it.
+      # Same warm instances as the stable one, so latency comparison is fair.
+      - name: Revision canary sin trafico
+        id: canary
+        env:
+          IMAGE: ${{ needs.images.outputs.image_canary }}
+          SHA: ${{ needs.images.outputs.sha_canary }}
+          REF: ${{ inputs.ref_canary }}
+        run: |
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then VERSION="${REF#v}"; else VERSION="4.0.0-rc.$SHA"; fi
+          SUFFIX="canary-$SHA-$GITHUB_RUN_NUMBER"
+          gcloud run deploy $SERVICE --region=$REGION --image="$IMAGE" \
+            --service-account=$API_ACCOUNT --add-cloudsql-instances=$SQL_CONNECTION \
+            --set-secrets="$SECRETS" --port=3000 \
+            --set-env-vars="APP_VERSION=$VERSION,TRACK=canary,FAULT_INJECTION=true,NODE_ENV=production,OTEL_SDK_DISABLED=true" \
+            --allow-unauthenticated --min-instances=1 --max-instances=4 --cpu=1 --memory=512Mi \
+            --revision-suffix="$SUFFIX" --tag=canary --no-traffic
+          echo "revision=$SERVICE-$SUFFIX" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
