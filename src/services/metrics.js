@@ -6,6 +6,7 @@ const {
   prometheusContentType,
 } = require('@prometheus-io/client');
 const { getRuntimeInfo } = require('../version');
+const { PRIORIDADES } = require('../v3/schemas');
 
 // Notes are created through the v1 route (stable and canary) and the v3 route (canary only)
 const NOTE_ROUTES = new Set(['/notas-medicas', '/api/v3/notas-medicas']);
@@ -35,7 +36,10 @@ const createMetrics = () => {
 
   const recordNote = (request, reply, runtime) => {
     const resultado = reply.statusCode === 201 ? 'registrada' : 'rechazada';
-    const prioridad = request.body?.prioridad || 'sin_prioridad';
+    // Client input never becomes a label value as is: that would create one
+    // series per typo
+    const raw = request.body?.prioridad;
+    const prioridad = PRIORIDADES.includes(raw) ? raw : (raw ? 'invalida' : 'sin_prioridad');
     notesRegistered.inc({ resultado, prioridad, ...runtime });
     // Cloud Logging turns this line into the log-based business metric
     request.log.info({ evento: 'nota_medica_registrada', resultado, prioridad, ...runtime });
