@@ -76,18 +76,19 @@ async function readCycle(url, headers, outcomes) {
   outcomes.push(await request(url, path, headers));
 }
 
-// Writes a note under /api/v4, with a deliberately invalid priority once in a
-// while so the registration business metric has both outcomes to compare.
-async function businessCycle(url, headers, outcomes, imagenId) {
-  const valid = Math.random() > 0.15;
-  const payload = {
+// Valid note for the v1 route, which both revisions serve the same way, so
+// the load never produces 4xx and both feed the registration business metric.
+function notePayload(imagenId) {
+  return {
     paciente: 'Carga de prueba',
     contenido: 'Generado por canary/load.js',
     fecha: new Date().toISOString().slice(0, 10),
     imagen_id: imagenId,
-    prioridad: valid ? ['baja', 'media', 'alta', 'critica'][Math.floor(Math.random() * 4)] : 'invalida',
   };
-  outcomes.push(await request(url, '/api/v4/notas-medicas', headers, 'POST', payload));
+}
+
+async function businessCycle(url, headers, outcomes, imagenId) {
+  outcomes.push(await request(url, '/notas-medicas', headers, 'POST', notePayload(imagenId)));
 }
 
 // The business cycle needs a real image id: production ids are not known in
@@ -166,4 +167,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { percentile, tally, run };
+module.exports = { percentile, tally, run, notePayload };

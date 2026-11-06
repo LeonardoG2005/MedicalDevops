@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { percentile, tally } = require('../canary/load');
+const { percentile, tally, notePayload } = require('../canary/load');
+const { notaMedicaInputSchema } = require('../src/schemas/medical-notes.schema');
 
 test('percentile calcula p50 y p95 sobre una lista ordenada', () => {
   const valores = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -30,4 +31,13 @@ test('tally agrupa por track y cuenta errores y latencias por separado', () => {
 test('tally agrupa como "desconocido" cuando no hay cabecera X-Track', () => {
   const result = tally([{ statusCode: 200, track: null, latencyMs: 5 }]);
   assert.equal(result.desconocido.total, 1);
+});
+
+test('la nota de carga cumple el esquema v1, que comparten stable y canary', () => {
+  const payload = notePayload(7);
+  const { properties, required } = notaMedicaInputSchema;
+
+  assert.deepEqual(Object.keys(payload).filter((campo) => !(campo in properties)), []);
+  assert.deepEqual(required.filter((campo) => !(campo in payload)), []);
+  assert.equal(payload.imagen_id, 7);
 });
