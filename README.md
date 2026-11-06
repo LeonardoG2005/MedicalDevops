@@ -104,9 +104,22 @@ flowchart LR
 | Orquestación | Kubernetes (GKE) para la API, Cloud Run para el orquestador |
 | Mensajería asíncrona | Google Cloud Pub/Sub |
 
-## Endpoints
+## Endpoints de sistema y Swagger
 
-### API v1 - CRUD de entidades
+Disponibles en todas las versiones:
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /` | Info básica del servicio |
+| `GET /health` | Liveness/readiness. Desde `v3.1.0` responde también `version` y `track` |
+| `GET /metrics` | Métricas Prometheus (`http_requests_total`, `http_request_duration_seconds`, métricas default de Node) |
+| `GET /documentation` | Swagger UI interactivo. El spec crudo está en `/documentation/json` |
+
+En Swagger cada endpoint tiene el botón **"Try it out"** para ejecutarlo desde el navegador. El `servers` del spec es `/` (relativo), así que funciona igual en local, en la estable o en la URL del canary.
+
+## v1: CRUD y CI/CD con dos ambientes
+
+### Endpoints
 
 | Recurso | Métodos | Notas |
 |---|---|---|
@@ -146,25 +159,7 @@ curl -X QUERY http://<host>/notas-medicas \
 | `GET /api/v2/documentos-generados/random` | Documento generado aleatorio local |
 | `GET /api/v2/imagenes/:id` | Imagen por id + llamada en vivo a la API de Juan (vuelo random) y a la de Angel (animal random), propagando `X-Trace-Id` |
 
-### Observabilidad y sistema
-
-| Endpoint | Qué hace |
-|---|---|
-| `GET /` | Info básica del servicio |
-| `GET /health` | Liveness/readiness check |
-| `GET /metrics` | Métricas Prometheus (`http_requests_total`, `http_request_duration_seconds`, métricas default de Node) |
-| `GET /documentation` | Swagger UI interactivo |
-
-## Cómo validar la API con Swagger
-
-1. Levanta la API (local, test o producción).
-2. Abre `http://<host>/documentation` en el navegador.
-3. Cada endpoint documentado tiene botón **"Try it out"** - completa el body/params según el schema mostrado y ejecuta directamente desde el navegador, sin necesidad de Postman/curl.
-4. El esquema OpenAPI crudo (si lo necesitas para importar a Postman/Insomnia) está en `http://<host>/documentation/json`.
-
-> Nota: el `servers` del spec está configurado como `/` (relativo), así que Swagger UI arma la URL correcta sin importar si estás en local, test o producción - no hay que editarlo al cambiar de ambiente.
-
-## Ambientes
+### Ambientes (v1 a v3)
 
 | | Pruebas | Producción |
 |---|---|---|
@@ -175,11 +170,13 @@ curl -X QUERY http://<host>/notas-medicas \
 | Variables/secrets | Secrets de Render independientes | `medical-api-secrets` + `medical-api-otel` (GKE Secrets, sincronizados desde Google Secret Manager vía `SecretProviderClass`) |
 | Cobertura mínima exigida | ≥ 60% | ≥ 85% |
 
-Ambos ambientes son completamente independientes: distinta base de datos, distintas credenciales, distinta URL pública.
+Ambos ambientes son completamente independientes: distinta base de datos, distintas credenciales, distinta URL pública. En v1 producción corría en Render; desde v2 pasó a GKE, que es lo que muestra la tabla.
 
-## CI/CD
+### CI/CD
 
-Dos pipelines independientes en GitHub Actions, uno por ambiente (`.github/workflows/test.yml` y `.github/workflows/production.yml`), ambos con la misma secuencia de *quality gates*:
+> Desde v4 estos dos workflows quedan como `*.yaml.disabled`: el despliegue de la API pasó a los workflows del canary (ver [v4](#v4-canary-deployment-en-cloud-run)).
+
+Dos pipelines independientes en GitHub Actions, uno por ambiente (`test.yaml` y `production.yaml`), ambos con la misma secuencia de *quality gates*:
 
 ```
 Checkout → Setup Node → Install deps → Migrar BD (npm run db:migrate)
