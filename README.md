@@ -1,8 +1,21 @@
 # Medical Documents API
 
-API RESTful académica para gestión de documentos médicos, construida con **Fastify** + **PostgreSQL**, con versionado, 2 ambientes independientes (Pruebas y Producción), pipelines CI/CD con quality gates, e integración multicloud con los equipos de Juan José Giraldo y Angel Avirama.
+API RESTful académica para gestión de documentos médicos, construida con **Fastify** + **PostgreSQL**. Es la API C del proyecto multicloud del curso Énfasis I: DevOps, integrada con las APIs de Juan José Giraldo (OCI) y Angel Avirama (AWS).
 
 Repositorio: https://github.com/LeonardoG2005/MedicalDevops
+
+## Releases
+
+El proyecto creció en cuatro entregas. Cada una tiene su tag en GitHub y este README se organiza por entrega.
+
+| Release | Tags | Qué aporta | Dónde corre |
+|---|---|---|---|
+| [v1](#v1-crud-y-cicd-con-dos-ambientes) | `v1.0.0`, `v1.1.0` | CRUD de las tres entidades, verbo `QUERY`, `PATCH`, CI/CD con gates de cobertura | Render (pruebas y producción) |
+| [v2](#v2-integración-multicloud) | `v2.0.0` | `/api/v2`, integración entre pares, orquestador con Pub/Sub, OpenTelemetry | GKE + Cloud Run |
+| [v3](#v3-infraestructura-como-código) | `v3.0.0`, `v3.1.0` | Terraform con estado remoto en GCS. `v3.1.0` agrega las cabeceras `X-App-Version` y `X-Track` | GKE |
+| [v4](#v4-canary-deployment-en-cloud-run) | `v4.0.0` | `/api/v4`, Canary Deployment con SLOs, puerta de calidad y rollback | Cloud Run |
+
+Las rutas de todas las versiones viven en la misma aplicación (`src/app.js`). Cada carpeta (`src/v2`, `src/v4`) contiene solo lo que esa versión agrega: la v4 no reemplaza a la v2, se suma a ella.
 
 ## Entidades
 
