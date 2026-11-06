@@ -21,6 +21,9 @@ const gate = require('./gate');
 
 const EXIT_OK = 0;
 const EXIT_ABORTED = 20;
+// Cloud Run publishes request_count once a minute and increase() needs two
+// samples inside the window, so a 1 minute window always comes back empty
+const MIN_WINDOW_MIN = 3;
 
 function sleep(seconds) {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -72,7 +75,7 @@ async function promote(slo, stages, bakeMin, metricsWaitSeconds, canaryRevision,
     await env.sleep(metricsWaitSeconds);
 
     const warmup = slo.calentamientoSegundos || 0;
-    const windowMin = Math.max(1, Math.ceil((bakeMin * 60 - warmup + metricsWaitSeconds) / 60));
+    const windowMin = Math.max(MIN_WINDOW_MIN, Math.ceil((bakeMin * 60 - warmup + metricsWaitSeconds) / 60));
 
     let decision;
     let reasons;
