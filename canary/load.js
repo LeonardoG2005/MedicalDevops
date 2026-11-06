@@ -76,18 +76,29 @@ async function readCycle(url, headers, outcomes) {
   outcomes.push(await request(url, path, headers));
 }
 
-// Writes a note under /api/v4, with a deliberately invalid priority once in a
-// while so the registration business metric has both outcomes to compare.
-async function businessCycle(url, headers, outcomes, imagenId) {
-  const valid = Math.random() > 0.15;
-  const payload = {
+// Even business writes go to the v1 route, which both revisions serve, so the
+// gate gets a registration success rate on each side to compare. Odd ones go
+// to /api/v4, which only the canary knows. Some notes are invalid on purpose
+// so the business metric has both outcomes.
+function noteRequest(businessCycle, imagenId, valid) {
+  const note = {
     paciente: 'Carga de prueba',
     contenido: 'Generado por canary/load.js',
     fecha: new Date().toISOString().slice(0, 10),
     imagen_id: imagenId,
-    prioridad: valid ? ['baja', 'media', 'alta', 'critica'][Math.floor(Math.random() * 4)] : 'invalida',
   };
-  outcomes.push(await request(url, '/api/v4/notas-medicas', headers, 'POST', payload));
+  if (businessCycle % 2 === 0) {
+    // v1 rejects unknown fields, so its invalid note is one missing contenido
+    const { contenido, ...withoutContent } = note;
+    return { path: '/notas-medicas', body: valid ? note : withoutContent };
+  }
+  const prioridad = valid ? ['baja', 'media', 'alta', 'critica'][Math.floor(Math.random() * 4)] : 'invalida';
+  return { path: '/api/v4/notas-medicas', body: { ...note, prioridad } };
+}
+
+async function businessCycle(url, headers, outcomes, imagenId, cycle) {
+  const { path, body } = noteRequest(cycle, imagenId, Math.random() > 0.15);
+  outcomes.push(await request(url, path, headers, 'POST', body));
 }
 
 // The business cycle needs a real image id: production ids are not known in
@@ -122,7 +133,7 @@ async function run({ url, durationSeconds, threads, fault, businessEvery, imagen
     while (Date.now() < deadline) {
       cycles += 1;
       if (businessEvery > 0 && cycles % businessEvery === 0) {
-        await businessCycle(url, headers, outcomes, imagenId);
+        await businessCycle(url, headers, outcomes, imagenId, cycles / businessEvery);
       } else {
         await readCycle(url, headers, outcomes);
       }
@@ -166,4 +177,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { percentile, tally, run };
+module.exports = { percentile, tally, run, noteRequest };
