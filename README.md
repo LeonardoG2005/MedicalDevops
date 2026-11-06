@@ -2,7 +2,6 @@
 
 API RESTful académica para gestión de documentos médicos, construida con **Fastify** + **PostgreSQL**. Es la API C del proyecto multicloud del curso Énfasis I: DevOps, integrada con las APIs de Juan José Giraldo (OCI) y Angel Avirama (AWS).
 
-Repositorio: https://github.com/LeonardoG2005/MedicalDevops
 
 ## Releases
 
