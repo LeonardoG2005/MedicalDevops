@@ -249,6 +249,51 @@ La autenticación con GCP es por Workload Identity Federation (`GCP_WIF_PROVIDER
 
 Es la versión que el canary usa como estable: tiene v1 y v2, pero no `/api/v4` ni el código de inyección de fallos.
 
+## v4: Canary Deployment en Cloud Run
+
+La v4 agrega una funcionalidad nueva (`/api/v4`, prioridad clínica en las notas) y la libera con una estrategia canary: la versión nueva recibe primero una fracción pequeña del tráfico real, se compara contra la estable con métricas y umbrales definidos de antemano, y solo avanza si los cumple. Si no, el tráfico vuelve por completo a la estable.
+
+### Arquitectura
+
+```mermaid
+flowchart LR
+  Clientes[Clientes] -->|URL pública| Router
+  Equipo[Equipo / pipeline] -->|"URL etiquetada canary---"| Canary
+
+  subgraph Run["Cloud Run: servicio medical-documents-api"]
+    Router{{"Reparto por revisión<br/>(100 - N) % / N %"}}
+    Stable["Revisión stable<br/>v3.1.0: v1 + /api/v2<br/>TRACK=stable"]
+    Canary["Revisión canary<br/>v4.0.0: v1 + /api/v2 + /api/v4<br/>TRACK=canary, FAULT_INJECTION=true"]
+    Router -->|"(100 - N) %"| Stable
+    Router -->|"N %"| Canary
+  end
+
+  AR[("Artifact Registry<br/>imágenes por digest")] -.-> Stable
+  AR -.-> Canary
+  Stable --> SQL[("Cloud SQL<br/>medical-devops-db")]
+  Canary --> SQL
+  Stable -.->|métricas y logs| Mon["Cloud Monitoring<br/>dashboard, alertas,<br/>métrica de negocio"]
+  Canary -.-> Mon
+  Gate["canary/promote.js<br/>+ canary/gate.js"] -->|consulta PromQL| Mon
+  Gate -->|update-traffic| Router
+```
+
+| Pieza | Valor |
+|---|---|
+| Proveedor | Google Cloud Platform, región `us-central1` |
+| Cómputo | Cloud Run, servicio `medical-documents-api`, una revisión por versión |
+| Imágenes | Artifact Registry `medical-api`, desplegadas por digest `sha256` |
+| Base de datos | Cloud SQL `medical-devops-db` compartida por ambas revisiones, vía socket `/cloudsql` |
+| Observabilidad | Cloud Monitoring (métricas nativas de Cloud Run + métrica basada en logs) |
+| Infraestructura | Dashboard, alertas y métrica de negocio en Terraform (`terraform/dashboard.tf`, `alertas.tf`, `monitoreo.tf`) |
+
+### Enrutamiento
+
+- **Por revisión y por petición.** Cloud Run asigna un porcentaje a cada revisión y reparte cada petición de forma independiente, sin depender del número de instancias. El cambio de porcentaje es inmediato: `gcloud run services update-traffic --to-revisions=...`.
+- **Etapa 0 por URL etiquetada.** El canary se despliega con `--no-traffic --tag=canary`. Cloud Run le da una URL propia (`https://canary---medical-documents-api-....run.app`) que no participa en el reparto público: el equipo la prueba mientras los usuarios siguen en la estable.
+- **Identificación en cada respuesta.** `X-App-Version` (`3.1.0` o `4.0.0`) y `X-Track` (`stable` o `canary`) dicen qué revisión atendió la petición.
+- **Sin sesión fija.** Un mismo cliente puede caer en una revisión y luego en la otra. Es seguro porque ambas comparten esquema (ver Expand/Contract) y la API no guarda estado en memoria.
+
 ## Cómo correr en local
 
 ```bash
