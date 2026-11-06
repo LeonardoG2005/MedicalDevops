@@ -222,7 +222,32 @@ El orquestador (`orchestrator/`) vive en el mismo repo pero se despliega por sep
 - `POST /internal/pubsub` - *push endpoint* interno que Pub/Sub invoca para procesar cada mensaje (llama en cadena a la API de Leonardo, Angel y Juan).
 - `GET /health`, `GET /metrics` - igual que la API principal.
 
-Ver `orchestrator/README.md` (pendiente) para el detalle completo de su arquitectura y variables de entorno.
+Ver [orchestrator/README.md](orchestrator/README.md) para el detalle completo de su arquitectura y variables de entorno.
+
+## v3: Infraestructura como código
+
+### Terraform (`v3.0.0`)
+
+La infraestructura de GCP se describe en `terraform/`, con estado remoto en un bucket de GCS (secret `TF_STATE_BUCKET`). Los recursos compartidos que ya estaban en uso (instancia de Cloud SQL, secretos, GKE) se referencian como `data sources` para no recrearlos; los propios de la entrega se declaran como `resource`.
+
+El workflow `terraform-gcp.yaml` corre en cada push a `main`:
+
+```
+validate: fmt -check → validate → plan → tests de la API
+apply:    terraform apply (solo en main, si validate pasa)
+```
+
+La autenticación con GCP es por Workload Identity Federation (`GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SERVICE_ACCOUNT`): no hay llaves JSON en GitHub. Detalle completo en [terraform/README.md](terraform/README.md).
+
+### Línea base estable (`v3.1.0`)
+
+`v3.1.0` es un cambio *minor* (compatible) que prepara el canary sin agregar rutas nuevas:
+
+- Cabeceras `X-App-Version` y `X-Track` en todas las respuestas, incluidos errores y 404 (`src/version.js`). Se configuran por revisión con las variables `APP_VERSION` y `TRACK`.
+- Etiquetas `version` y `track` en las métricas `http_requests_total` y `http_request_duration_seconds`.
+- La métrica de negocio `medical_notes_registered_total` y su línea de log `evento=nota_medica_registrada`.
+
+Es la versión que el canary usa como estable: tiene v1 y v2, pero no `/api/v4` ni el código de inyección de fallos.
 
 ## Cómo correr en local
 
