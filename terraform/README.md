@@ -10,12 +10,16 @@ de Artifact Registry.
 | Servicio | Recurso | Tratamiento |
 | --- | --- | --- |
 | Cloud SQL for PostgreSQL | `medical-devops-db` / `medical_devops` | `data source`, existente |
-| GKE | `medical-devops-gke` | `data source`, existente |
 | Artifact Registry | `medical-api` | `data source`, existente |
 | Cloud Run | `medical-orchestrator` | fuera del estado; se conserva el `cloudbuild.yaml` |
-| Pub/Sub | `medical-orchestrator-events` y DLQ | `data source`, existentes |
+| Cloud Run | `medical-documents-api` (API, v4) | fuera del estado; sus revisiones las crean los workflows del canary |
+| Pub/Sub | `medical-orchestrator-events` y tópico DLQ | `data source`, existentes |
 | Secret Manager | secretos de la API | `data source`; nunca se leen valores |
+| IAM | acceso de `medical-api-gsa` al secreto de Cloud Run | **administrado por Terraform** (`iam.tf`) |
+| Cloud Monitoring | dashboard stable contra canary, 2 alertas, métrica de negocio basada en logs | **administrado por Terraform** (`dashboard.tf`, `alertas.tf`, `monitoreo.tf`) |
 | Cloud Storage | bucket de resultados | **creado y administrado por Terraform** |
+
+Desde v4 el clúster GKE ya no se referencia: la API pasó a Cloud Run y el clúster queda fuera de esta configuración.
 
 Así se cumplen los servicios de plataforma necesarios sin duplicar recursos
 compartidos. La base de datos real de producción es Cloud SQL PostgreSQL,
@@ -104,11 +108,12 @@ o las identidades no coinciden con la infraestructura comprobada.
 
 El workflow `terraform-gcp.yaml` valida los pushes a `feature/terraform` y
 `main`. Cuando la validación termina correctamente después de un push a
-`main`, el job `apply-and-deploy` continúa automáticamente, sin
-`workflow_dispatch`, sin input manual y sin esperar aprobación de un
-environment. La etapa aplica Terraform, publica la imagen de la API y
-despliega los manifiestos existentes en el GKE existente. El Orchestrator
-conserva su despliegue independiente mediante `orchestrator/cloudbuild.yaml`.
+`main`, el job `apply` continúa automáticamente, sin input manual y sin
+esperar aprobación de un environment, y solo aplica Terraform. Desde v4 ya no
+despliega la API: eso lo hacen los workflows manuales del canary
+(`canary-deploy.yml`, `canary-promote.yml`, `canary-rollback.yml`). El
+Orchestrator conserva su despliegue independiente mediante
+`orchestrator/cloudbuild.yaml`.
 
 Los pushes a `feature/terraform` ejecutan únicamente validación y pruebas.
 El despliegue automático está limitado a `main` para evitar desplegar cambios
@@ -187,7 +192,7 @@ Esta configuración puede destruir los recursos declarados como `resource`,
 incluidos la base de datos lógica, Artifact Registry, Pub/Sub y el bucket de
 resultados. `force_destroy = false` evita borrar objetos silenciosamente;
 vacíe los buckets de forma consciente antes de destruirlos. Los recursos
-consultados con `data` (GKE, Cloud Run, Secret Manager e instancia de Cloud
+consultados con `data` (Secret Manager e instancia de Cloud
 SQL) no se destruyen porque no forman parte del estado administrado.
 
 Para demostrar el ciclo completo de la entrega:
@@ -210,11 +215,9 @@ terraform -chdir=terraform apply
 ```
 
 La recreación no restaura imágenes Docker, datos anteriores de la base de
-datos ni secretos. El pipeline despliega la imagen y ejecuta
-`npm run db:migrate` dentro del pod nuevo después del rollout, usando el
-`DATABASE_URL` sincronizado desde Secret Manager. Si se ejecuta `apply`
-manualmente fuera del pipeline, publique la imagen, despliegue Kubernetes y
-ejecute esa migración desde un pod antes de probar los endpoints.
+datos ni secretos. Después del `apply`, el workflow *Desplegar al 0 %*
+publica las imágenes y ejecuta las migraciones como el job de Cloud Run
+`medical-api-migrate`, con el `DATABASE_URL` de Secret Manager.
 
 ## Recursos existentes e importación manual
 
@@ -238,7 +241,7 @@ académico adicional. La alternativa correcta en Terraform es adoptarlos:
 4. revisar que `terraform plan` no proponga cambios destructivos;
 5. solo después permitir el pipeline.
 
-La configuración mantiene GKE, Cloud Run, Secret Manager, la instancia de
+La configuración mantiene Secret Manager, la instancia de
 Cloud SQL y la DLQ de Pub/Sub como `data sources`. Artifact Registry, la base
 de datos lógica de Cloud SQL, el tópico Pub/Sub y su suscripción están
 declarados como `resource`. El bucket de resultados también es un recurso
