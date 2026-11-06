@@ -364,6 +364,39 @@ X-Fault: error=0.5;latency=800
 
 `error` es la fracción de peticiones que responden 500 y `latency` los milisegundos de demora (máximo 5000). Solo funciona si la revisión tiene `FAULT_INJECTION=true`, que únicamente tiene el canary; la imagen estable ni siquiera contiene ese código (`src/fault-injection.js`). Solo afecta rutas `/api/*`, no `/health` ni `/metrics`.
 
+### Workflows
+
+Los tres son manuales (*Actions → Run workflow*) y se autentican en GCP por Workload Identity Federation.
+
+| Workflow | Entradas | Qué hace |
+|---|---|---|
+| `canary-deploy.yml` *Desplegar al 0 %* | `ref_stable` (por defecto `v3.1.0`), `ref_canary` | Construye ambas imágenes y las publica por digest. Si el servicio no existe, crea la revisión estable. Corre la migración Expand con la imagen canary, despliega el canary con `--no-traffic --tag=canary` y hace la prueba de humo de la etapa 0 |
+| `canary-promote.yml` *Promover por etapas* | `scenario` (`exito`, `falla-errores`, `falla-latencia`), `stages` (`10,50,100`), `bake` (minutos) | Ejecuta `canary/promote.js`: por cada etapa sube el tráfico, genera carga, mide y consulta la puerta. Si aborta, devuelve el 100 % a la estable y sale con código 20 |
+| `canary-rollback.yml` *Revertir a la estable* | ninguna | Rollback manual: 100 % del tráfico a la revisión etiquetada `stable` |
+
+`ref_canary` acepta un tag o una rama. Con un tag (`v4.0.0`) la versión del canary es `4.0.0`; con una rama queda como candidata, por ejemplo `4.0.0-rc.774f503`.
+
+Los escenarios `falla-*` envían la cabecera `X-Fault` en la carga (`error=0.5` o `latency=3000`), así que la puerta debe abortar en la primera etapa.
+
+### Repetir desde cero
+
+Después de una promoción exitosa el canary pasa a ser la estable. Para volver a tener v3.1.0 contra v4.0.0:
+
+```bash
+gcloud run services delete medical-documents-api --region=us-central1 --quiet
+```
+
+y correr de nuevo *Desplegar al 0 %*. Esto solo borra el servicio de Cloud Run; la base de datos, las imágenes, el dashboard y las alertas se conservan.
+
+### Scripts del canary en local
+
+```bash
+node canary/load.js --url https://<servicio> --duration 30 --threads 8   # reparto real por track
+node canary/gate.js --canary <revision> --stable <revision> --window 5   # decisión puntual
+```
+
+`gate.js` necesita `gcloud` autenticado, porque consulta Cloud Monitoring.
+
 ## Cómo correr en local
 
 ```bash
@@ -388,6 +421,9 @@ docker compose up --build
 imagenes (id, nombre, url, fecha_creacion)
 notas_medicas (id, paciente, contenido, fecha, imagen_id → imagenes.id)
 documentos_generados (id, nombre, tipo, url, fecha_generacion, nota_medica_id → notas_medicas.id)
+
+-- supabase/migrations/002_expand_prioridad_notas.sql (v4, Expand)
+notas_medicas.prioridad VARCHAR(10) NULL  -- baja | media | alta | critica
 ```
 
-Las migraciones **no** se ejecutan automáticamente al iniciar la app - se ejecutan explícitamente con `npm run db:migrate`, tanto en local como en ambos pipelines de CI, antes de correr los tests. Esto mantiene una separación clara entre "levantar el servicio" y "preparar el esquema de la base de datos".
+Las migraciones **no** se ejecutan automáticamente al iniciar la app - se ejecutan explícitamente con `npm run db:migrate`, que aplica todos los archivos de `supabase/migrations/` en orden. En CI corre antes de los tests y en Cloud Run como el job `medical-api-migrate`. Esto mantiene una separación clara entre "levantar el servicio" y "preparar el esquema de la base de datos".
