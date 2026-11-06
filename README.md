@@ -31,7 +31,7 @@ imagenes ──< notas_medicas ──< documentos_generados
 
 Ambas relaciones son `NOT NULL` con `ON DELETE CASCADE` - borrar una imagen borra en cascada sus notas y documentos.
 
-## Arquitectura general del grupo
+## Arquitectura del grupo (desde v2)
 
 El proyecto integra 3 APIs independientes, cada una en una nube distinta, coordinadas por un orquestador asíncrono vía Pub/Sub. Este repositorio implementa **API C** (documentos médicos) y el **orquestador**.
 
@@ -99,9 +99,10 @@ flowchart LR
 | Observabilidad | OpenTelemetry (trazas, métricas, logs) → OTLP → Grafana Cloud |
 | Métricas | `prom-client` compatible, expuestas en `/metrics` (formato Prometheus) |
 | Documentación API | OpenAPI 3.0 vía `@fastify/swagger` + `@fastify/swagger-ui` en `/documentation` |
-| CI/CD | GitHub Actions - 2 pipelines independientes |
+| CI/CD | GitHub Actions |
+| Infraestructura como código | Terraform, estado remoto en GCS (desde v3) |
 | Contenedores | Docker, imágenes publicadas en Artifact Registry (GCP) |
-| Orquestación | Kubernetes (GKE) para la API, Cloud Run para el orquestador |
+| Ejecución | GKE para la API en v2 y v3; Cloud Run para la API desde v4 y para el orquestador |
 | Mensajería asíncrona | Google Cloud Pub/Sub |
 
 ## Endpoints de sistema y Swagger
@@ -150,15 +151,6 @@ curl -X QUERY http://<host>/notas-medicas \
   -d '{"paciente": "Ana", "imagen_id": 3}'
 ```
 
-### API v2 - integración entre pares
-
-| Endpoint | Qué hace |
-|---|---|
-| `GET /api/v2/imagenes/random` | Imagen aleatoria local |
-| `GET /api/v2/notas-medicas/random` | Nota médica aleatoria local |
-| `GET /api/v2/documentos-generados/random` | Documento generado aleatorio local |
-| `GET /api/v2/imagenes/:id` | Imagen por id + llamada en vivo a la API de Juan (vuelo random) y a la de Angel (animal random), propagando `X-Trace-Id` |
-
 ### Ambientes (v1 a v3)
 
 | | Pruebas | Producción |
@@ -185,9 +177,24 @@ Checkout → Setup Node → Install deps → Migrar BD (npm run db:migrate)
 
 **Regla de aprobación obligatoria:** si cualquier paso anterior falla (tests con errores, o cobertura por debajo del umbral), GitHub Actions detiene el job automáticamente - el `build` y el `deploy` **nunca se ejecutan**. No hace falta lógica adicional para esto: es el comportamiento por defecto de un job de Actions (cada `step` depende implícitamente de que el anterior haya salido con código 0).
 
-El pipeline de producción (`production.yml`) despliega a GKE: construye la imagen, la publica en Artifact Registry con el tag = SHA del commit, aplica los manifiestos de `k8s/` y actualiza la imagen del Deployment con `kubectl set image` + espera el rollout. Ver el archivo para el detalle completo.
+El pipeline de producción (`production.yaml`) despliega a GKE: construye la imagen, la publica en Artifact Registry con el tag = SHA del commit, aplica los manifiestos de `k8s/` y actualiza la imagen del Deployment con `kubectl set image` + espera el rollout.
 
-## Kubernetes (producción)
+## v2: Integración multicloud
+
+La arquitectura del grupo está [al inicio](#arquitectura-del-grupo-desde-v2). Esta release agrega las rutas `/api/v2`, el despliegue en GKE, el orquestador y OpenTelemetry.
+
+### Endpoints `/api/v2`
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /api/v2/imagenes/random` | Imagen aleatoria local |
+| `GET /api/v2/notas-medicas/random` | Nota médica aleatoria local |
+| `GET /api/v2/documentos-generados/random` | Documento generado aleatorio local |
+| `GET /api/v2/imagenes/:id` | Imagen por id + llamada en vivo a la API de Juan (vuelo random) y a la de Angel (animal random), propagando `X-Trace-Id` |
+
+### Kubernetes (GKE)
+
+> En v4 la carpeta `k8s/` se retiró del repositorio porque la API pasó a Cloud Run. Los manifiestos siguen disponibles en el tag `v3.0.0`. El clúster sigue activo porque el orquestador y las APIs de los compañeros aún consumen su IP.
 
 Manifiestos en `k8s/`:
 
@@ -199,15 +206,15 @@ Manifiestos en `k8s/`:
 | `secret-provider-class.yaml` / `secret-sync.yaml` | Sincronizan `DATABASE_URL`, `API_A_URL`, `API_C_URL` desde Google Secret Manager a un Secret de Kubernetes |
 | `service-account.yaml` | Service Account de K8s enlazada (Workload Identity) a una cuenta de servicio de GCP |
 | `pod-monitoring.yaml` | `PodMonitoring` (Google Cloud Managed Prometheus) scrapeando `/metrics` cada 30s |
-| ` hpa.yaml` | `HorizontalPodAutoscaler` que escala automáticamente entre 2 y 5 réplicas según el uso de CPU |
+| `hpa.yaml` | `HorizontalPodAutoscaler` que escala automáticamente entre 2 y 5 réplicas según el uso de CPU |
 
-## Observabilidad
+### Observabilidad
 
 - **Trazas y métricas de aplicación:** OpenTelemetry auto-instrumentation (`--require @opentelemetry/auto-instrumentations-node/register`), exportadas vía OTLP a Grafana Cloud. Activo tanto en la API (`OTEL_SERVICE_NAME=api-c-documentos`) como en el orquestador.
 - **Métricas de infraestructura:** `PodMonitoring` de GKE scrapea `/metrics` (formato Prometheus) cada 30 segundos.
 - **Trace propagation:** header `X-Trace-Id` de negocio en toda la cadena; OpenTelemetry gestiona el `traceparent` W3C real en las llamadas instrumentadas automáticamente.
 
-## Orquestador
+### Orquestador
 
 El orquestador (`orchestrator/`) vive en el mismo repo pero se despliega por separado en **Cloud Run** (`orchestrator/cloudbuild.yaml`). Expone:
 
