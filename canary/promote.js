@@ -75,12 +75,15 @@ async function promote(slo, stages, bakeMin, metricsWaitSeconds, canaryRevision,
     await env.sleep(metricsWaitSeconds);
 
     const warmup = slo.calentamientoSegundos || 0;
-    const windowMin = Math.max(MIN_WINDOW_MIN, Math.ceil((bakeMin * 60 - warmup + metricsWaitSeconds) / 60));
+    const bakeWindowMin = Math.max(MIN_WINDOW_MIN, Math.ceil((bakeMin * 60 - warmup + metricsWaitSeconds) / 60));
+    const retryMin = Math.ceil((pausa.esperaSegundos + metricsWaitSeconds) / 60);
 
     let decision;
     let reasons;
     for (let attempt = 0; attempt <= pausa.reintentosMax; attempt += 1) {
-      let { canary, stable } = await env.measure(windowMin);
+      // A PAUSE adds load to grow the sample, so the window has to grow with
+      // it; otherwise the earlier load slides out and the count never adds up
+      let { canary, stable } = await env.measure(bakeWindowMin + attempt * retryMin);
       if (percent >= 100) {
         // No baseline in parallel anymore: comparing against it would judge
         // the canary against a past window, not the current one
