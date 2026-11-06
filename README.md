@@ -378,25 +378,6 @@ Los tres son manuales (*Actions → Run workflow*) y se autentican en GCP por Wo
 
 Los escenarios `falla-*` envían la cabecera `X-Fault` en la carga (`error=0.5` o `latency=3000`), así que la puerta debe abortar en la primera etapa.
 
-### Repetir desde cero
-
-Después de una promoción exitosa el canary pasa a ser la estable. Para volver a tener v3.1.0 contra v4.0.0:
-
-```bash
-gcloud run services delete medical-documents-api --region=us-central1 --quiet
-```
-
-y correr de nuevo *Desplegar al 0 %*. Esto solo borra el servicio de Cloud Run; la base de datos, las imágenes, el dashboard y las alertas se conservan.
-
-### Scripts del canary en local
-
-```bash
-node canary/load.js --url https://<servicio> --duration 30 --threads 8   # reparto real por track
-node canary/gate.js --canary <revision> --stable <revision> --window 5   # decisión puntual
-```
-
-`gate.js` necesita `gcloud` autenticado, porque consulta Cloud Monitoring.
-
 ## Cómo correr en local
 
 ```bash
