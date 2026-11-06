@@ -22,8 +22,3 @@ output "pubsub_subscription" {
   description = "Existing Orchestrator event subscription."
   value       = google_pubsub_subscription.events.name
 }
-
-output "dead_letter_subscription" {
-  description = "Existing dead-letter subscription."
-  value       = data.google_pubsub_subscription.dead_letter.name
-}
