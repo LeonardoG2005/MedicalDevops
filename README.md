@@ -61,34 +61,37 @@ El proyecto integra 3 APIs independientes, cada una en una nube distinta, coordi
 
 ```mermaid
 flowchart LR
-  Cliente[Cliente / Postman] -->|"POST /api/v2/flujo + X-Trace-Id"| Orq
+  Cliente(["Cliente / Postman"]) -->|"POST /api/v2/flujo + X-Trace-Id"| Orq
 
-  subgraph GCP["GCP - operado por Leonardo Guevara (este repo)"]
-    Orq[Orquestador<br/>Cloud Run]
-    PubSub[("Pub/Sub<br/>medical-orchestrator-events<br/>reintentos")]
-    subgraph GKE["GKE - 2 réplicas + HPA"]
-      ApiC[API C - Documentos médicos<br/>Imagen · NotaMedica · DocumentoGenerado]
+  subgraph GCP["Google Cloud · Leonardo Guevara (este repo)"]
+    Orq["Orquestador<br/>Cloud Run"]
+    PubSub[["Pub/Sub<br/>medical-orchestrator-events<br/>reintentos"]]
+    subgraph GKE["GKE · 2 réplicas + HPA"]
+      ApiC["API C · Documentos médicos<br/>Imagen · NotaMedica · DocumentoGenerado"]
     end
-    SQL[(Cloud SQL<br/>PostgreSQL, vía proxy)]
+    SQL[("Cloud SQL<br/>PostgreSQL, vía proxy")]
   end
 
-  subgraph AWS["AWS - operado por Angel Avirama"]
-    ApiB[API B - Adopción<br/>EKS]
-    Redis[(ElastiCache Redis<br/>caché con TTL)]
+  subgraph AWS["AWS · Angel Avirama"]
+    ApiB["API B · Adopción<br/>EKS"]
+    Redis[("ElastiCache Redis<br/>caché con TTL")]
   end
 
-  subgraph OCI["OCI - operado por Juan José Giraldo"]
-    ApiA[API A - PSS Aerolínea<br/>OKE, 2-5 réplicas, HPA]
-    PG[(PostgreSQL<br/>Block Volume)]
-    Bucket[(Object Storage<br/>snapshots del flujo)]
+  subgraph OCI["Oracle Cloud · Juan José Giraldo"]
+    LB{{"Load Balancer"}}
+    ApiA["API A · PSS Aerolínea<br/>OKE, 2-5 réplicas, HPA"]
+    PG[("PostgreSQL<br/>Block Volume")]
+    Bucket[("Object Storage<br/>snapshots del flujo")]
+    Consumer["Consumidor<br/>de snapshots"]
   end
 
-  Grafana[Grafana Cloud<br/>métricas, logs, trazas, alerta]
+  Grafana(["Grafana Cloud<br/>métricas, logs, trazas, alerta"])
 
   Orq <-->|mensaje| PubSub
   Orq -->|"1. GET imagen"| ApiC
   Orq -->|"2. GET animal"| ApiB
   Orq -->|"3. GET vuelo, 4. POST /api/v2/mensaje"| LB --> ApiA
+  ApiC --> SQL
   ApiA --> PG
   ApiA -->|"flujo/trace_id.json"| Bucket
   Bucket --> Consumer -->|"adjuntos/trace_id/resumen.md"| Bucket
@@ -103,6 +106,27 @@ flowchart LR
   ApiB -. OTLP .-> Grafana
   ApiC -. OTLP .-> Grafana
   Orq -. OTLP .-> Grafana
+
+  classDef gcp fill:#e8f0fe,stroke:#4285f4,stroke-width:2px,color:#174ea6
+  classDef aws fill:#fff4e5,stroke:#ff9900,stroke-width:2px,color:#7a4a00
+  classDef oci fill:#fdecea,stroke:#c74634,stroke-width:2px,color:#7f1d1d
+  classDef data fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#1e293b
+  classDef ext fill:#ffffff,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:4 3,color:#1e293b
+  classDef obs fill:#fff1e6,stroke:#f46800,stroke-width:2px,color:#7c2d12
+  classDef mine fill:#4285f4,stroke:#174ea6,stroke-width:3px,color:#ffffff
+
+  class Orq,PubSub gcp
+  class ApiC mine
+  class ApiB aws
+  class LB,ApiA,Consumer oci
+  class SQL,Redis,PG,Bucket data
+  class Cliente ext
+  class Grafana obs
+
+  style GCP fill:#f8fbff,stroke:#4285f4,stroke-width:2px,color:#174ea6
+  style GKE fill:#eef4ff,stroke:#8ab4f8,stroke-dasharray:5 4,color:#174ea6
+  style AWS fill:#fffaf2,stroke:#ff9900,stroke-width:2px,color:#7a4a00
+  style OCI fill:#fff7f6,stroke:#c74634,stroke-width:2px,color:#7f1d1d
 ```
 
 | Integrante | Nube | API | Componente transversal |
@@ -281,15 +305,15 @@ La v4 agrega una funcionalidad nueva (`/api/v4`, prioridad clínica en las notas
 
 ```mermaid
 flowchart LR
-  Clientes[Clientes] -->|URL pública| Router
-  Equipo[Equipo / pipeline] -->|"URL etiquetada canary---"| Canary
+  Clientes(["Clientes"]) -->|URL pública| Router
+  Equipo(["Equipo / pipeline"]) -->|"URL etiquetada canary---"| Canary
 
-  subgraph Run["Cloud Run: servicio medical-documents-api"]
+  subgraph Run["Cloud Run · servicio medical-documents-api"]
     Router{{"Reparto por revisión<br/>(100 - N) % / N %"}}
     Stable["Revisión stable<br/>v3.1.0: v1 + /api/v2<br/>TRACK=stable"]
     Canary["Revisión canary<br/>v4.0.0: v1 + /api/v2 + /api/v4<br/>TRACK=canary, FAULT_INJECTION=true"]
-    Router -->|"(100 - N) %"| Stable
-    Router -->|"N %"| Canary
+    Router ==>|"(100 - N) %"| Stable
+    Router ==>|"N %"| Canary
   end
 
   AR[("Artifact Registry<br/>imágenes por digest")] -.-> Stable
@@ -298,8 +322,24 @@ flowchart LR
   Canary --> SQL
   Stable -.->|métricas y logs| Mon["Cloud Monitoring<br/>dashboard, alertas,<br/>métrica de negocio"]
   Canary -.-> Mon
-  Gate["canary/promote.js<br/>+ canary/gate.js"] -->|consulta PromQL| Mon
+  Gate[["canary/promote.js<br/>+ canary/gate.js"]] -->|consulta PromQL| Mon
   Gate -->|update-traffic| Router
+
+  classDef stable fill:#e6f4ea,stroke:#1e8e3e,stroke-width:2px,color:#0d652d
+  classDef canary fill:#fef7e0,stroke:#f9ab00,stroke-width:3px,color:#7a4f01
+  classDef router fill:#4285f4,stroke:#174ea6,stroke-width:2px,color:#ffffff
+  classDef gate fill:#f3e8fd,stroke:#9334e6,stroke-width:2px,color:#4a148c
+  classDef data fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#1e293b
+  classDef ext fill:#ffffff,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:4 3,color:#1e293b
+
+  class Stable stable
+  class Canary canary
+  class Router router
+  class Gate gate
+  class AR,SQL,Mon data
+  class Clientes,Equipo ext
+
+  style Run fill:#f8fbff,stroke:#4285f4,stroke-width:2px,color:#174ea6
 ```
 
 | Pieza | Valor |
