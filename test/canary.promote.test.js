@@ -66,3 +66,13 @@ test('con un bake de 1 minuto la ventana de medición no baja de 3 minutos', asy
 
   assert.deepEqual(calls.windows, [3]);
 });
+
+test('cada PAUSA ensancha la ventana para que la carga anterior siga contando', async () => {
+  const noSample = { canary: emptyMeasurement(), stable: emptyMeasurement() };
+  const { env, calls } = fakeEnv([noSample]);
+
+  await promote(slo, [10], 1, 90, 'canary-rev', 'stable-rev', env, () => {});
+
+  // retry = 60 s of load + 90 s of metrics wait = 3 more minutes each time
+  assert.deepEqual(calls.windows, [3, 6, 9, 12]);
+});
