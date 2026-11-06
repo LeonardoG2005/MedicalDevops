@@ -1,45 +1,45 @@
 const {
-  listNotasMedicasV3,
-  createNotaMedicaV3,
+  listNotasMedicasV4,
+  createNotaMedicaV4,
   setPrioridad,
 } = require('./notes.controller');
 const { getResumenImagen } = require('./resumen.controller');
 const {
   prioridadSchema,
-  notaMedicaV3Schema,
-  notaMedicaV3InputSchema,
+  notaMedicaV4Schema,
+  notaMedicaV4InputSchema,
   prioridadBodySchema,
   idParamSchema,
   errorSchema,
 } = require('./schemas');
 
-async function v3Routes(app) {
-  app.get('/api/v3/notas-medicas', {
+async function v4Routes(app) {
+  app.get('/api/v4/notas-medicas', {
     schema: {
-      tags: ['V3'],
+      tags: ['V4'],
       querystring: { type: 'object', properties: { prioridad: prioridadSchema } },
-      response: { 200: { type: 'array', items: notaMedicaV3Schema } },
+      response: { 200: { type: 'array', items: notaMedicaV4Schema } },
     },
-  }, async (request) => listNotasMedicasV3(request.query.prioridad));
+  }, async (request) => listNotasMedicasV4(request.query.prioridad));
 
-  app.post('/api/v3/notas-medicas', {
+  app.post('/api/v4/notas-medicas', {
     schema: {
-      tags: ['V3'],
-      body: notaMedicaV3InputSchema,
-      response: { 201: notaMedicaV3Schema },
+      tags: ['V4'],
+      body: notaMedicaV4InputSchema,
+      response: { 201: notaMedicaV4Schema },
     },
   }, async (request, reply) => {
-    const nota = await createNotaMedicaV3(request.body);
+    const nota = await createNotaMedicaV4(request.body);
     reply.code(201);
     return nota;
   });
 
-  app.patch('/api/v3/notas-medicas/:id/prioridad', {
+  app.patch('/api/v4/notas-medicas/:id/prioridad', {
     schema: {
-      tags: ['V3'],
+      tags: ['V4'],
       params: idParamSchema,
       body: prioridadBodySchema,
-      response: { 200: notaMedicaV3Schema, 404: errorSchema },
+      response: { 200: notaMedicaV4Schema, 404: errorSchema },
     },
   }, async (request, reply) => {
     const nota = await setPrioridad(request.params.id, request.body.prioridad);
@@ -49,9 +49,9 @@ async function v3Routes(app) {
     return nota;
   });
 
-  app.get('/api/v3/imagenes/:id/resumen', {
+  app.get('/api/v4/imagenes/:id/resumen', {
     schema: {
-      tags: ['V3'],
+      tags: ['V4'],
       params: idParamSchema,
       response: {
         200: {
@@ -75,4 +75,4 @@ async function v3Routes(app) {
   });
 }
 
-module.exports = v3Routes;
+module.exports = v4Routes;

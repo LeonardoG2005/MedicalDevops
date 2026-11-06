@@ -2,7 +2,7 @@ const { query } = require('../db/connection');
 
 const COLUMNS = 'id, paciente, contenido, fecha, imagen_id, prioridad';
 
-async function listNotasMedicasV3(prioridad) {
+async function listNotasMedicasV4(prioridad) {
   if (prioridad) {
     const result = await query(
       `SELECT ${COLUMNS} FROM notas_medicas WHERE prioridad = $1 ORDER BY id ASC`,
@@ -14,7 +14,7 @@ async function listNotasMedicasV3(prioridad) {
   return result.rows;
 }
 
-async function createNotaMedicaV3({ paciente, contenido, fecha, imagen_id, prioridad }) {
+async function createNotaMedicaV4({ paciente, contenido, fecha, imagen_id, prioridad }) {
   const result = await query(
     `INSERT INTO notas_medicas (paciente, contenido, fecha, imagen_id, prioridad)
      VALUES ($1, $2, $3, $4, $5) RETURNING ${COLUMNS}`,
@@ -31,4 +31,4 @@ async function setPrioridad(id, prioridad) {
   return result.rows[0] || null;
 }
 
-module.exports = { listNotasMedicasV3, createNotaMedicaV3, setPrioridad };
+module.exports = { listNotasMedicasV4, createNotaMedicaV4, setPrioridad };

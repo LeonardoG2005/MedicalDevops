@@ -2,7 +2,7 @@ const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
 
 const prioridadSchema = { type: 'string', enum: PRIORIDADES };
 
-const notaMedicaV3Schema = {
+const notaMedicaV4Schema = {
   type: 'object',
   properties: {
     id: { type: 'integer' },
@@ -16,7 +16,7 @@ const notaMedicaV3Schema = {
   required: ['id', 'paciente', 'contenido', 'fecha', 'imagen_id', 'prioridad'],
 };
 
-const notaMedicaV3InputSchema = {
+const notaMedicaV4InputSchema = {
   type: 'object',
   properties: {
     paciente: { type: 'string', minLength: 1 },
@@ -47,8 +47,8 @@ const errorSchema = { type: 'object', properties: { error: { type: 'string' } } 
 module.exports = {
   PRIORIDADES,
   prioridadSchema,
-  notaMedicaV3Schema,
-  notaMedicaV3InputSchema,
+  notaMedicaV4Schema,
+  notaMedicaV4InputSchema,
   prioridadBodySchema,
   idParamSchema,
   errorSchema,
