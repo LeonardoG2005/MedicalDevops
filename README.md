@@ -326,6 +326,44 @@ La migración corre antes de desplegar el canary, como un job de Cloud Run (`med
 
 Los porcentajes y el `bake` son parámetros del workflow de promoción. Durante cada etapa `canary/load.js` genera carga contra la URL pública, para que ambas revisiones reciban tráfico en la misma ventana de tiempo.
 
+### Métricas por track
+
+| Señal | Métrica en Cloud Monitoring |
+|---|---|
+| Tráfico | `run.googleapis.com/request_count` por revisión |
+| Errores 5xx y 4xx | `request_count` agrupado por `response_code_class` |
+| Latencia p50 / p95 / p99 | `run.googleapis.com/request_latencies` (histograma) |
+| CPU y memoria | `container/cpu/utilizations` y `container/memory/utilizations` |
+| Negocio | `logging/user/medical_api_notas_registradas`: intentos de registrar una nota médica, `registrada` (201) o `rechazada`, por track |
+
+La métrica de negocio sale de la línea de log `evento=nota_medica_registrada` que escribe la API (`src/services/metrics.js`) y que Terraform convierte en métrica (`terraform/monitoreo.tf`). Registrar notas clínicas es la operación central del dominio: si el canary la rompe, la tasa de registro exitoso cae aunque no haya errores 5xx.
+
+El dashboard **"Medical API: stable contra canary"** (`terraform/dashboard.tf`) muestra todas estas señales con una línea por revisión, lado a lado. Se abre en *Cloud Console → Monitoring → Dashboards*.
+
+### SLOs y puerta de calidad
+
+Los umbrales están versionados en [`canary/slo.json`](canary/slo.json) y se fijan antes de desplegar. `canary/gate.js` mide ambas revisiones en la misma ventana (Cloud Monitoring, API compatible con PromQL) y su función `decide()` devuelve una de tres decisiones:
+
+| Decisión | Cuándo | Efecto |
+|---|---|---|
+| PAUSAR | Menos de 300 peticiones en el canary, o algún umbral de promover sin cumplir pero ninguno de abortar | Mantiene el porcentaje, agrega 60 s de carga y vuelve a medir (hasta 3 veces; después aborta) |
+| ABORTAR | 5xx > 5 %, p95 > 2000 ms, p95 más de 3 veces el de la estable (y 300 ms por encima), o tasa de registro 30 puntos por debajo de la estable | Tráfico 100 % a la estable y el workflow termina en rojo |
+| PROMOVER | 5xx ≤ 1 %, no más de 0,5 puntos de error por encima de la estable, p95 ≤ 1500 ms, p99 ≤ 3000 ms, p95 ≤ 1,5 veces el de la estable, registro a menos de 15 puntos de la estable, CPU ≤ 80 %, memoria ≤ 85 % | Pasa a la siguiente etapa |
+
+**Comparación justa.** Canary y estable se miden en la misma ventana de tiempo, con la misma carga, el mismo tamaño de instancia y la misma base de datos, así que un mal momento de la plataforma afecta a las dos por igual. La muestra mínima de 300 peticiones por revisión sale de la regla de tres: con 0 errores en *n* peticiones, la tasa real es menor que 3/*n* con 95 % de confianza, y 3/300 = 1 %, justo el límite de promover. Los primeros 90 s de cada etapa no se cuentan (calentamiento).
+
+**Alertas.** Además de la puerta, `terraform/alertas.tf` define dos alertas en Cloud Monitoring (5xx del canary > 5 % y p95 > 2 s durante 2 minutos). Siguen activas aunque no esté corriendo ningún pipeline; los incidentes se ven en *Monitoring → Alerting*.
+
+### Inyección de fallos
+
+Para demostrar el aborto sin romper código, el canary obedece la cabecera `X-Fault`:
+
+```
+X-Fault: error=0.5;latency=800
+```
+
+`error` es la fracción de peticiones que responden 500 y `latency` los milisegundos de demora (máximo 5000). Solo funciona si la revisión tiene `FAULT_INJECTION=true`, que únicamente tiene el canary; la imagen estable ni siquiera contiene ese código (`src/fault-injection.js`). Solo afecta rutas `/api/*`, no `/health` ni `/metrics`.
+
 ## Cómo correr en local
 
 ```bash
