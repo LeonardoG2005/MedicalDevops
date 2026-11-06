@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildApp } = require('../src/app');
 const { parseFault } = require('../src/fault-injection');
+const { resetDatabase } = require('./helpers');
+
+// The /api routes below hit the database, so the schema must exist even when
+// this file runs first on an empty CI database
+test.before(async () => {
+  await resetDatabase();
+});
 
 test('parseFault lee tasa de error y latencia, ignora lo que no entiende', () => {
   assert.deepEqual(parseFault('error=0.5;latency=800'), { errorRate: 0.5, latencyMs: 800 });
@@ -33,6 +40,8 @@ test('Con FAULT_INJECTION=true, error=1 fuerza un 500 en rutas /api', async (t) 
   });
 
   assert.equal(response.statusCode, 500);
+  const metrics = await app.inject({ method: 'GET', url: '/metrics' });
+  assert.match(metrics.body, /http_requests_total\{[^}]*status_code="500"[^}]*\} 1/);
 });
 
 test('La inyección de fallos no afecta /health ni rutas fuera de /api', async (t) => {
