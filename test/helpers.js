@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
-const path = require('path');
 const { Pool } = require('pg');
+const { listMigrations } = require('../scripts/migrate');
 
 process.env.NODE_ENV = 'test';
 
@@ -23,10 +23,9 @@ async function ensureSchema() {
     return;
   }
 
-  const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '001_initial_schema.sql');
-  const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-
-  await pool.query(migrationSql);
+  for (const file of listMigrations()) {
+    await pool.query(fs.readFileSync(file, 'utf8'));
+  }
   schemaInitialized = true;
 }
 

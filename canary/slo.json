@@ -1,0 +1,34 @@
+{
+  "_comentario": "Umbrales que decide canary/gate.js. Se fijan antes de desplegar: promover, pausar o abortar no depende de que alguien mire el dashboard a tiempo. Orden de decision: 1) menos peticiones que muestraMinima.peticionesCanary -> PAUSAR, 2) algun limite de abortar superado -> ABORTAR, 3) todos los limites de promover se cumplen -> PROMOVER, 4) cualquier otro caso -> PAUSAR y reevaluar.",
+  "calentamientoSegundos": 90,
+  "_muestraMinima": "Regla de tres: con 0 errores en n peticiones, la tasa real de error es menor que 3/n con 95 % de confianza. Con n = 300 queda por debajo del 1 %, que es justo el limite de promover.",
+  "muestraMinima": {
+    "peticionesCanary": 300,
+    "peticionesStable": 300,
+    "registros": 10
+  },
+  "promover": {
+    "tasaError5xxMax": 0.01,
+    "latenciaP95MsMax": 1500,
+    "latenciaP99MsMax": 3000,
+    "errorExtraMax": 0.005,
+    "p95VsStableMax": 1.5,
+    "p95DiferenciaMinMs": 150,
+    "registroCaidaMax": 0.15
+  },
+  "abortar": {
+    "tasaError5xxMax": 0.05,
+    "latenciaP95MsMax": 2000,
+    "p95VsStableMax": 3,
+    "p95DiferenciaMinMs": 300,
+    "registroCaidaMax": 0.3
+  },
+  "saturacion": {
+    "cpuMax": 0.8,
+    "memoriaMax": 0.85
+  },
+  "pausa": {
+    "reintentosMax": 3,
+    "esperaSegundos": 60
+  }
+}

@@ -8,11 +8,6 @@ output "artifact_registry_repository" {
   value       = google_artifact_registry_repository.api.name
 }
 
-output "gke_cluster" {
-  description = "Existing GKE cluster reused by the API deployment."
-  value       = data.google_container_cluster.gke.name
-}
-
 output "cloud_sql_instance" {
   description = "Existing production Cloud SQL instance used through the Auth Proxy."
   value       = data.google_sql_database_instance.production.name

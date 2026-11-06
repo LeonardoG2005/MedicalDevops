@@ -1,0 +1,43 @@
+name: Canary v4 - Revertir a la estable
+
+# Manual: sends all traffic back to the stable revision (0 % canary, 100 %
+# stable). The database is not touched: the canary only added a nullable
+# column, so the stable revision keeps working with the same data.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  REGION: us-central1
+  SERVICE: medical-documents-api
+
+jobs:
+  rollback:
+    name: Dejar el 100 % en la estable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # The stable revision is the one tagged "stable"
+      - name: Revertir
+        run: |
+          STABLE=$(gcloud run services describe $SERVICE --region=$REGION --format=json \
+            | jq -r '.status.traffic[] | select(.tag=="stable") | .revisionName')
+          [ -n "$STABLE" ] || { echo "No hay una revision con la etiqueta stable"; exit 1; }
+          gcloud run services update-traffic $SERVICE --region=$REGION --to-revisions="$STABLE=100"
+          echo "### Revertido: 100 % en $STABLE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verificar con peticiones reales
+        run: |
+          URL=$(gcloud run services describe $SERVICE --region=$REGION --format='value(status.url)')
+          for i in $(seq 1 20); do curl -fsS -D - -o /dev/null "$URL/health" | grep -i "^x-track"; done | sort | uniq -c
+          ! curl -fsS -D - -o /dev/null "$URL/health" | grep -qi "x-track: canary"

@@ -15,9 +15,6 @@ env:
   TF_IN_AUTOMATION: true
   GCP_PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
   GCP_REGION: us-central1
-  ARTIFACT_REPO: medical-api
-  IMAGE_NAME: medical-documents-api
-  GKE_CLUSTER: medical-devops-gke
 
 jobs:
   validate:
@@ -73,10 +70,16 @@ jobs:
           test/health.test.js
           test/images.test.js
           test/medical-notes.test.js
+          test/v3.notes.test.js
+          test/fault-injection.test.js
       - run: npm ci --prefix orchestrator
       - run: npm test --prefix orchestrator
 
-  apply-and-deploy:
+  # The API itself no longer deploys from here: the canary-* workflows build
+  # its images and move traffic between the stable and canary Cloud Run
+  # revisions. This job only keeps the supporting infrastructure (database,
+  # secrets, dashboard, alerts) in sync with the code.
+  apply:
     if: github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -91,7 +94,6 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
       - name: Initialize Terraform remote state
         env:
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
@@ -101,33 +103,3 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="prefix=medicaldevops/terraform"
       - run: terraform -chdir=terraform apply -auto-approve -input=false
-      - run: docker build -t "${IMAGE_NAME}:${GITHUB_SHA}" .
-      - run: |
-          image_uri="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
-          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" "$image_uri"
-          docker push "$image_uri"
-      - uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ env.GKE_CLUSTER }}
-          location: ${{ env.GCP_REGION }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
-      - run: |
-          kubectl apply -f k8s/config-map.yaml
-          kubectl apply -f k8s/hpa.yaml
-          kubectl apply -f k8s/pod-monitoring.yaml
-          kubectl apply -f k8s/secret-provider-class.yaml
-          kubectl apply -f k8s/secret-sync.yaml
-          kubectl apply -f k8s/service-account.yaml
-          kubectl apply -f k8s/service.yaml
-          image_uri="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
-          kubectl set image deployment/medical-documents-api medical-documents-api="$image_uri" -n default
-          kubectl rollout status deployment/medical-documents-api -n default --timeout=300s
-          kubectl exec deployment/medical-documents-api -n default -c medical-documents-api -- npm run db:migrate
-          kubectl get deployment/medical-documents-api -n default
-      - name: Show rollout diagnostics on failure
-        if: failure()
-        run: |
-          kubectl get deployment/medical-documents-api -n default -o wide
-          kubectl get pods -n default -l app=medical-documents-api -o wide
-          kubectl describe pods -n default -l app=medical-documents-api
-          kubectl get events -n default --sort-by='.lastTimestamp' | tail -n 50

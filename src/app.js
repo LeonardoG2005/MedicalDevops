@@ -12,11 +12,16 @@ const imagenesRoutes = require('./routes/images.routes');
 const notasMedicasRoutes = require('./routes/medical-notes.routes');
 const documentosGeneradosRoutes = require('./routes/generated-documents.routes');
 const v2Routes = require('./v2/routes');
+const v3Routes = require('./v3/routes');
 const { createMetrics } = require('./services/metrics');
+const { getRuntimeInfo, registerVersionHeaders } = require('./version');
+const { registerFaultInjection } = require('./fault-injection');
 
 async function buildApp(options = {}) {
   const app = Fastify({ logger: true });
   const metrics = options.metrics || createMetrics();
+  registerVersionHeaders(app);
+  registerFaultInjection(app);
   metrics.registerRequestHooks(app);
 
   app.setErrorHandler((error, request, reply) => {
@@ -44,6 +49,7 @@ async function buildApp(options = {}) {
         { name: 'Imagenes', description: 'Gestión de imágenes' },
         { name: 'NotasMedicas', description: 'Gestión de notas médicas' },
         { name: 'DocumentosGenerados', description: 'Gestión de documentos generados' },
+        { name: 'V3', description: 'Notas con prioridad clínica y resumen por imagen (canary)' },
       ],
     },
   });
@@ -88,16 +94,19 @@ async function buildApp(options = {}) {
           type: 'object',
           properties: {
             status: { type: 'string' },
+            version: { type: 'string' },
+            track: { type: 'string' },
           },
         },
       },
     },
-  }, async () => ({ status: 'ok' }));
+  }, async () => ({ status: 'ok', ...getRuntimeInfo() }));
 
   await app.register(imagenesRoutes);
   await app.register(notasMedicasRoutes);
   await app.register(documentosGeneradosRoutes);
   await app.register(v2Routes);
+  await app.register(v3Routes);
 
   return app;
 }
