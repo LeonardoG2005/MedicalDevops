@@ -9,15 +9,16 @@ function healthyMeasurement() {
 }
 
 function fakeEnv(measurements) {
-  const calls = { traffic: [], load: [], measure: 0, sleep: [] };
+  const calls = { traffic: [], load: [], measure: 0, windows: [], sleep: [] };
   return {
     calls,
     env: {
       setTraffic: async (split) => calls.traffic.push(split),
       generateLoad: async (seconds) => calls.load.push(seconds),
-      measure: async () => {
+      measure: async (windowMin) => {
         const result = measurements[calls.measure] || measurements[measurements.length - 1];
         calls.measure += 1;
+        calls.windows.push(windowMin);
         return result;
       },
       sleep: async (seconds) => calls.sleep.push(seconds),
@@ -56,4 +57,12 @@ test('reintenta en PAUSA y aborta si no hay evidencia suficiente', async () => {
 
   assert.equal(code, 20);
   assert.equal(calls.measure, slo.pausa.reintentosMax + 1);
+});
+
+test('con un bake de 1 minuto la ventana de medición no baja de 3 minutos', async () => {
+  const { env, calls } = fakeEnv([{ canary: healthyMeasurement(), stable: healthyMeasurement() }]);
+
+  await promote(slo, [10], 1, 90, 'canary-rev', 'stable-rev', env, () => {});
+
+  assert.deepEqual(calls.windows, [3]);
 });
