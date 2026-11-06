@@ -21,8 +21,9 @@ async function buildApp(options = {}) {
   const app = Fastify({ logger: true });
   const metrics = options.metrics || createMetrics();
   registerVersionHeaders(app);
-  registerFaultInjection(app);
+  // Metrics first: an injected 500 must be timed and counted like a real one
   metrics.registerRequestHooks(app);
+  registerFaultInjection(app);
 
   app.setErrorHandler((error, request, reply) => {
     if (error.code === '23503') {
