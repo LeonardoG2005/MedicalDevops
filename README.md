@@ -1,4 +1,29 @@
-# Medical Documents API
+# 🩺 Medical Documents API
+
+<p align="center">
+  <a href="https://github.com/LeonardoG2005/MedicalDevops/tags"><img alt="Último tag" src="https://img.shields.io/github/v/tag/LeonardoG2005/MedicalDevops?sort=semver&style=for-the-badge&label=release&color=0f766e"></a>
+  <a href="https://github.com/LeonardoG2005/MedicalDevops/actions/workflows/terraform-gcp.yaml"><img alt="Terraform GCP" src="https://img.shields.io/github/actions/workflow/status/LeonardoG2005/MedicalDevops/terraform-gcp.yaml?branch=main&style=for-the-badge&label=terraform&logo=terraform&logoColor=white"></a>
+  <img alt="Canary" src="https://img.shields.io/badge/deploy-canary_0%E2%86%9210%E2%86%9250%E2%86%92100-F9AB00?style=for-the-badge&logo=googlecloud&logoColor=white">
+</p>
+
+<p align="center">
+  <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white">
+  <img alt="Fastify 5" src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Cloud_SQL-4169E1?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-node:22--alpine-2496ED?style=flat-square&logo=docker&logoColor=white">
+  <img alt="Cloud Run" src="https://img.shields.io/badge/Cloud_Run-us--central1-4285F4?style=flat-square&logo=googlecloud&logoColor=white">
+  <img alt="Terraform" src="https://img.shields.io/badge/Terraform-GCS_state-844FBA?style=flat-square&logo=terraform&logoColor=white">
+  <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub_Actions-WIF-2088FF?style=flat-square&logo=githubactions&logoColor=white">
+  <img alt="OpenTelemetry" src="https://img.shields.io/badge/OpenTelemetry-OTLP-000000?style=flat-square&logo=opentelemetry&logoColor=white">
+  <img alt="Grafana Cloud" src="https://img.shields.io/badge/Grafana-Cloud-F46800?style=flat-square&logo=grafana&logoColor=white">
+  <img alt="Swagger" src="https://img.shields.io/badge/OpenAPI-3.0-85EA2D?style=flat-square&logo=swagger&logoColor=black">
+</p>
+
+<p align="center">
+  <img alt="GCP" src="https://img.shields.io/badge/API_C-GCP-4285F4?style=flat-square&logo=googlecloud&logoColor=white">
+  <img alt="AWS" src="https://img.shields.io/badge/API_B-AWS_EKS-FF9900?style=flat-square&logo=kubernetes&logoColor=white">
+  <img alt="OCI" src="https://img.shields.io/badge/API_A-OCI_OKE-C74634?style=flat-square&logo=kubernetes&logoColor=white">
+</p>
 
 API RESTful académica para gestión de documentos médicos, construida con **Fastify** + **PostgreSQL**. Es la API C del proyecto multicloud del curso Énfasis I: DevOps, integrada con las APIs de Juan José Giraldo (OCI) y Angel Avirama (AWS).
 
