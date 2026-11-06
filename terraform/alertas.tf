@@ -5,6 +5,14 @@ locals {
   filtro_canary = "monitored_resource=\"cloud_run_revision\",service_name=\"${var.servicio_cloud_run}\",revision_name=~\".*canary.*\""
 }
 
+resource "google_monitoring_notification_channel" "email_alertas" {
+  display_name = "Email alertas Medical API"
+  type         = "email"
+  labels = {
+    email_address = "leosowilo2005@gmail.com"
+  }
+}
+
 resource "google_monitoring_alert_policy" "canary_errores" {
   display_name = "Medical API: errores 5xx del canary por encima del 5 %"
   combiner     = "OR"
@@ -27,6 +35,8 @@ resource "google_monitoring_alert_policy" "canary_errores" {
     content   = "El canary devuelve mas del 5 % de errores 5xx. Umbral definido en canary/slo.json. Accion: ejecutar el workflow de rollback para dejar 0 % de trafico al canary."
   }
 
+  notification_channels = [google_monitoring_notification_channel.email_alertas.id]
+
   depends_on = [google_project_service.required]
 }
 
@@ -48,6 +58,8 @@ resource "google_monitoring_alert_policy" "canary_latencia" {
     mime_type = "text/markdown"
     content   = "La latencia p95 del canary supera el limite de aborto de canary/slo.json."
   }
+
+  notification_channels = [google_monitoring_notification_channel.email_alertas.id]
 
   depends_on = [google_project_service.required]
 }
