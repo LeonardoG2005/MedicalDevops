@@ -76,7 +76,7 @@ async function readCycle(url, headers, outcomes) {
   outcomes.push(await request(url, path, headers));
 }
 
-// Writes a note under /api/v3, with a deliberately invalid priority once in a
+// Writes a note under /api/v4, with a deliberately invalid priority once in a
 // while so the registration business metric has both outcomes to compare.
 async function businessCycle(url, headers, outcomes, imagenId) {
   const valid = Math.random() > 0.15;
@@ -87,7 +87,7 @@ async function businessCycle(url, headers, outcomes, imagenId) {
     imagen_id: imagenId,
     prioridad: valid ? ['baja', 'media', 'alta', 'critica'][Math.floor(Math.random() * 4)] : 'invalida',
   };
-  outcomes.push(await request(url, '/api/v3/notas-medicas', headers, 'POST', payload));
+  outcomes.push(await request(url, '/api/v4/notas-medicas', headers, 'POST', payload));
 }
 
 // The business cycle needs a real image id: production ids are not known in

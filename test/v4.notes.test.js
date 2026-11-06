@@ -7,13 +7,13 @@ test.beforeEach(async () => {
   await resetDatabase();
 });
 
-test('V3: crea una nota con prioridad obligatoria', async () => {
+test('V4: crea una nota con prioridad obligatoria', async () => {
   const app = await buildApp();
   const image = await createImage();
 
   const response = await app.inject({
     method: 'POST',
-    url: '/api/v3/notas-medicas',
+    url: '/api/v4/notas-medicas',
     payload: {
       paciente: 'Paciente 030',
       contenido: 'Dolor torácico agudo.',
@@ -27,13 +27,13 @@ test('V3: crea una nota con prioridad obligatoria', async () => {
   assert.equal(response.json().prioridad, 'alta');
 });
 
-test('V3: rechaza una prioridad fuera del catálogo', async () => {
+test('V4: rechaza una prioridad fuera del catálogo', async () => {
   const app = await buildApp();
   const image = await createImage();
 
   const response = await app.inject({
     method: 'POST',
-    url: '/api/v3/notas-medicas',
+    url: '/api/v4/notas-medicas',
     payload: {
       paciente: 'Paciente 031',
       contenido: 'Revisión.',
@@ -46,27 +46,27 @@ test('V3: rechaza una prioridad fuera del catálogo', async () => {
   assert.equal(response.statusCode, 400);
 });
 
-test('V3: lista y filtra por prioridad, incluyendo notas antiguas sin prioridad', async () => {
+test('V4: lista y filtra por prioridad, incluyendo notas antiguas sin prioridad', async () => {
   const app = await buildApp();
   const image = await createImage();
 
   await app.inject({ method: 'POST', url: '/notas-medicas', payload: {
     paciente: 'Antigua', contenido: 'Sin prioridad.', fecha: '2026-08-16', imagen_id: image.id,
   } });
-  await app.inject({ method: 'POST', url: '/api/v3/notas-medicas', payload: {
+  await app.inject({ method: 'POST', url: '/api/v4/notas-medicas', payload: {
     paciente: 'Nueva', contenido: 'Con prioridad.', fecha: '2026-08-16', imagen_id: image.id, prioridad: 'critica',
   } });
 
-  const todas = await app.inject({ method: 'GET', url: '/api/v3/notas-medicas' });
+  const todas = await app.inject({ method: 'GET', url: '/api/v4/notas-medicas' });
   assert.equal(todas.json().length, 2);
   assert.equal(todas.json().find((nota) => nota.paciente === 'Antigua').prioridad, null);
 
-  const filtradas = await app.inject({ method: 'GET', url: '/api/v3/notas-medicas?prioridad=critica' });
+  const filtradas = await app.inject({ method: 'GET', url: '/api/v4/notas-medicas?prioridad=critica' });
   assert.equal(filtradas.json().length, 1);
   assert.equal(filtradas.json()[0].paciente, 'Nueva');
 });
 
-test('V3: PATCH de prioridad actualiza una nota existente de v1', async () => {
+test('V4: PATCH de prioridad actualiza una nota existente de v1', async () => {
   const app = await buildApp();
   const image = await createImage();
 
@@ -76,7 +76,7 @@ test('V3: PATCH de prioridad actualiza una nota existente de v1', async () => {
 
   const actualizada = await app.inject({
     method: 'PATCH',
-    url: `/api/v3/notas-medicas/${creada.json().id}/prioridad`,
+    url: `/api/v4/notas-medicas/${creada.json().id}/prioridad`,
     payload: { prioridad: 'baja' },
   });
 
@@ -84,26 +84,26 @@ test('V3: PATCH de prioridad actualiza una nota existente de v1', async () => {
   assert.equal(actualizada.json().prioridad, 'baja');
 });
 
-test('V3: PATCH de prioridad sobre un id inexistente devuelve 404', async () => {
+test('V4: PATCH de prioridad sobre un id inexistente devuelve 404', async () => {
   const app = await buildApp();
 
   const response = await app.inject({
     method: 'PATCH',
-    url: '/api/v3/notas-medicas/999/prioridad',
+    url: '/api/v4/notas-medicas/999/prioridad',
     payload: { prioridad: 'baja' },
   });
 
   assert.equal(response.statusCode, 404);
 });
 
-test('V3: resumen de una imagen cuenta notas, documentos y la prioridad máxima', async () => {
+test('V4: resumen de una imagen cuenta notas, documentos y la prioridad máxima', async () => {
   const app = await buildApp();
   const image = await createImage();
 
-  const nota1 = await app.inject({ method: 'POST', url: '/api/v3/notas-medicas', payload: {
+  const nota1 = await app.inject({ method: 'POST', url: '/api/v4/notas-medicas', payload: {
     paciente: 'A', contenido: 'Leve.', fecha: '2026-08-16', imagen_id: image.id, prioridad: 'baja',
   } });
-  await app.inject({ method: 'POST', url: '/api/v3/notas-medicas', payload: {
+  await app.inject({ method: 'POST', url: '/api/v4/notas-medicas', payload: {
     paciente: 'B', contenido: 'Grave.', fecha: '2026-08-16', imagen_id: image.id, prioridad: 'critica',
   } });
   await app.inject({ method: 'POST', url: '/documentos-generados', payload: {
@@ -111,7 +111,7 @@ test('V3: resumen de una imagen cuenta notas, documentos y la prioridad máxima'
     fecha_generacion: '2026-08-16', nota_medica_id: nota1.json().id,
   } });
 
-  const resumen = await app.inject({ method: 'GET', url: `/api/v3/imagenes/${image.id}/resumen` });
+  const resumen = await app.inject({ method: 'GET', url: `/api/v4/imagenes/${image.id}/resumen` });
 
   assert.equal(resumen.statusCode, 200);
   assert.deepEqual(resumen.json(), {
@@ -119,10 +119,10 @@ test('V3: resumen de una imagen cuenta notas, documentos y la prioridad máxima'
   });
 });
 
-test('V3: resumen de una imagen inexistente devuelve 404', async () => {
+test('V4: resumen de una imagen inexistente devuelve 404', async () => {
   const app = await buildApp();
 
-  const response = await app.inject({ method: 'GET', url: '/api/v3/imagenes/999/resumen' });
+  const response = await app.inject({ method: 'GET', url: '/api/v4/imagenes/999/resumen' });
 
   assert.equal(response.statusCode, 404);
 });

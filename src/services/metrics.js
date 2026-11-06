@@ -6,10 +6,10 @@ const {
   prometheusContentType,
 } = require('@prometheus-io/client');
 const { getRuntimeInfo } = require('../version');
-const { PRIORIDADES } = require('../v3/schemas');
+const { PRIORIDADES } = require('../v4/schemas');
 
-// Notes are created through the v1 route (stable and canary) and the v3 route (canary only)
-const NOTE_ROUTES = new Set(['/notas-medicas', '/api/v3/notas-medicas']);
+// Notes are created through the v1 route (stable and canary) and the v4 route (canary only)
+const NOTE_ROUTES = new Set(['/notas-medicas', '/api/v4/notas-medicas']);
 
 const createMetrics = () => {
   const registry = new Registry();

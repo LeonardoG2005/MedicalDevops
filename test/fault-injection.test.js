@@ -21,7 +21,7 @@ test('Sin FAULT_INJECTION=true, la cabecera X-Fault no tiene efecto', async () =
 
   const response = await app.inject({
     method: 'GET',
-    url: '/api/v3/notas-medicas',
+    url: '/api/v4/notas-medicas',
     headers: { 'x-fault': 'error=1' },
   });
 
@@ -35,7 +35,7 @@ test('Con FAULT_INJECTION=true, error=1 fuerza un 500 en rutas /api', async (t) 
 
   const response = await app.inject({
     method: 'GET',
-    url: '/api/v3/notas-medicas',
+    url: '/api/v4/notas-medicas',
     headers: { 'x-fault': 'error=1' },
   });
 

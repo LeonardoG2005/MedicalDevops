@@ -161,7 +161,7 @@ jobs:
           echo "Canary por su URL de revision:"
           curl -fsS -D - "$CANARY_URL/health" | tee /tmp/canary.txt
           grep -qi "x-track: canary" /tmp/canary.txt
-          curl -fsS -o /dev/null "$CANARY_URL/api/v3/notas-medicas"
+          curl -fsS -o /dev/null "$CANARY_URL/api/v4/notas-medicas"
 
           echo "El publico no debe ver el canary:"
           for i in $(seq 1 10); do curl -fsS -D - -o /dev/null "$PUBLIC/health" | grep -i "^x-track"; done | sort | uniq -c

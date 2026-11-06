@@ -1,4 +1,4 @@
--- Expand phase for api/v3: the column accepts NULL, so v3.1.0 (stable) keeps
+-- Expand phase for api/v4: the column accepts NULL, so v3.1.0 (stable) keeps
 -- reading and writing notes without knowing it exists and the canary can be
 -- rolled back without touching data. Dropping anything belongs to a later
 -- Contract migration, once no revision depends on the old shape.
