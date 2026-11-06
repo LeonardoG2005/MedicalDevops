@@ -393,17 +393,3 @@ O con Docker:
 ```bash
 docker compose up --build
 ```
-
-## Entidades de referencia del schema
-
-```sql
--- supabase/migrations/001_initial_schema.sql
-imagenes (id, nombre, url, fecha_creacion)
-notas_medicas (id, paciente, contenido, fecha, imagen_id → imagenes.id)
-documentos_generados (id, nombre, tipo, url, fecha_generacion, nota_medica_id → notas_medicas.id)
-
--- supabase/migrations/002_expand_prioridad_notas.sql (v4, Expand)
-notas_medicas.prioridad VARCHAR(10) NULL  -- baja | media | alta | critica
-```
-
-Las migraciones **no** se ejecutan automáticamente al iniciar la app - se ejecutan explícitamente con `npm run db:migrate`, que aplica todos los archivos de `supabase/migrations/` en orden. En CI corre antes de los tests y en Cloud Run como el job `medical-api-migrate`. Esto mantiene una separación clara entre "levantar el servicio" y "preparar el esquema de la base de datos".
