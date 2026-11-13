@@ -16,8 +16,6 @@ const {
   getAnimalRandom,
 } = require('../services/peer-client');
 
-const crypto = require('node:crypto');
-
 function getRandomItem(items) {
   if (!Array.isArray(items) || items.length === 0) {
     return null;
@@ -98,9 +96,8 @@ async function getRandomDocumentoGenerado(request, reply) {
 async function getImagenByIdWithPeers(request, reply) {
   const { id } = request.params;
 
-  const traceId =
-    request.headers['x-trace-id'] ||
-    crypto.randomUUID();
+  // Same id as the logs and the X-Trace-Id response header (see src/trace.js)
+  const traceId = request.id;
 
   try {
     const imagen = await getImagenById(id);
