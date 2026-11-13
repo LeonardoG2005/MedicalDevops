@@ -1,6 +1,6 @@
 {
   "name": "medical-documents-api",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Academic medical documents API with Fastify by Leo :)",
   "main": "src/server.js",
   "scripts": {
@@ -33,6 +33,7 @@
     "@prometheus-io/client": "^0.16.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
+    "opossum": "^10.0.0",
     "pg": "^8.13.0"
   },
   "devDependencies": {
