@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medical-api-config
+  namespace: default
+data:
+  PORT: "3000"
+  HOST: "0.0.0.0"
+  NODE_ENV: "production"
+  APP_VERSION: "5.0.0"
+  TRACK: "stable"
+  # Round 0 = "false" (bare calls), Round 1 = "true" (timeout + breaker +
+  # degraded answer). The deploy workflow patches this key; a change needs a
+  # rollout restart because env vars are read at start.
+  RESILIENCE_ENABLED: "false"
+  RESILIENCE_TIMEOUT_MS: "2000"
+  BREAKER_RESET_MS: "10000"
+  BREAKER_VOLUME_THRESHOLD: "5"
+  # The chaos switch only exists while this is "true" (kill switch: set to
+  # "false" and restart). The token comes from Secret Manager, see
+  # secret-provider-class.yaml.
+  CHAOS_ENABLED: "true"
+  # OpenTelemetry: traces and the experiment metrics go to Grafana Cloud over
+  # OTLP. Logs stay on stdout (Cloud Logging) and the Prometheus /metrics
+  # endpoint is scraped by Managed Prometheus (pod-monitoring.yaml).
+  OTEL_SDK_DISABLED: "false"
+  OTEL_SERVICE_NAME: "api-c-documentos"
+  OTEL_RESOURCE_ATTRIBUTES: "service.version=5.0.0,deployment.environment=gke,cloud.provider=gcp"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: "cumulative"
+  OTEL_PROPAGATORS: "tracecontext,baggage"
+  # Stable HTTP semantic conventions: http_server_request_duration_seconds and
+  # http_client_request_duration_seconds (per peer host) in Grafana
+  OTEL_SEMCONV_STABILITY_OPT_IN: "http"
+  OTEL_NODE_RESOURCE_DETECTORS: "env,host,os,process,container,gcp"
