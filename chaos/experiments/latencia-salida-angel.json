@@ -1,0 +1,145 @@
+{
+  "version": "1.0.0",
+  "title": "Latencia inyectada en la llamada saliente del coordinador (GKE) hacia la API de Angel (AWS)",
+  "description": "Hipotesis falsable: dado el perfil de carga P (10 usuarios virtuales en bucle cerrado durante 5 minutos, chaos/k6/flujo.js), cuando se inyecten 3000 ms de latencia en la llamada saliente hacia la API de Angel durante la duracion de la carga, el flujo GET /api/v5/flujo mantendra la latencia p95 extremo a extremo por debajo de 2000 ms y la tasa de error por debajo del 5 %. Ronda 0 (RESILIENCE_ENABLED=false): se espera que la hipotesis se refute, porque la latencia se suma entera al flujo. Ronda 1 (timeout de 2 s por dependencia + circuit breaker + respuesta degradada): se espera que se mantenga. Radio de impacto: solo la dependencia 'angel' del flujo v5 en los pods del coordinador; el resto de rutas, la base de datos y las APIs de los compañeros no se tocan. Duracion: la carga (5 min) mas el TTL maximo del fallo (7 min), que es la reversion automatica si la ejecucion muere. Condiciones de aborto: k6 detiene la carga si mas del 50 % de las peticiones fallan durante 60 s; Chaos Toolkit ejecuta los rollbacks siempre (--rollback-strategy=always). Metrica objetivo: p95 de http_req_duration medido por k6; ventana de observacion: los 5 minutos de la carga.",
+  "tags": ["medical-api", "latencia", "dependencia-externa", "gke", "aws", "ronda-${ronda}"],
+  "contributions": {
+    "availability": "high",
+    "performance": "high",
+    "security": "none"
+  },
+  "configuration": {
+    "base_url": { "type": "env", "key": "CHAOS_BASE_URL", "default": "http://34.123.58.136" },
+    "imagen_id": { "type": "env", "key": "IMAGEN_ID", "default": "random" },
+    "ronda": { "type": "env", "key": "RONDA", "default": "0" },
+    "latencia_ms": { "type": "env", "key": "LATENCIA_MS", "default": "3000" },
+    "ttl_seconds": { "type": "env", "key": "TTL_SECONDS", "default": "420" },
+    "p95_ms": { "type": "env", "key": "P95_MS", "default": "2000" },
+    "perfil": { "type": "env", "key": "PERFIL", "default": "completo" },
+    "results_dir": { "type": "env", "key": "RESULTS_DIR", "default": "chaos/results" }
+  },
+  "secrets": {
+    "caos": {
+      "token": { "type": "env", "key": "CHAOS_TOKEN" }
+    }
+  },
+  "steady-state-hypothesis": {
+    "title": "El flujo responde 200 en menos de ${p95_ms} ms y no hay fallos activos en el interruptor",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "la-api-esta-sana",
+        "tolerance": 0,
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": ["chaos/probes.js", "salud"],
+          "timeout": 30
+        }
+      },
+      {
+        "type": "probe",
+        "name": "el-flujo-completo-responde-a-tiempo",
+        "tolerance": 0,
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": ["chaos/probes.js", "flujo", "--max-ms", "${p95_ms}", "--imagen", "${imagen_id}"],
+          "timeout": 45
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "probe",
+      "name": "antes-no-hay-fallos-activos",
+      "tolerance": 0,
+      "secrets": ["caos"],
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "sin-fallos"],
+        "timeout": 30
+      }
+    },
+    {
+      "type": "action",
+      "name": "inyectar-latencia-hacia-angel",
+      "secrets": ["caos"],
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "activar", "--peer", "angel", "--latencia", "${latencia_ms}", "--ttl", "${ttl_seconds}", "--motivo", "experimento latencia ronda ${ronda}"],
+        "timeout": 30
+      },
+      "pauses": { "after": 5 }
+    },
+    {
+      "type": "probe",
+      "name": "una-peticion-durante-el-fallo",
+      "secrets": ["caos"],
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "flujo", "--max-ms", "60000", "--imagen", "${imagen_id}"],
+        "timeout": 70
+      }
+    },
+    {
+      "type": "action",
+      "name": "carga-k6-con-el-perfil-declarado",
+      "provider": {
+        "type": "process",
+        "path": "k6",
+        "arguments": [
+          "run",
+          "--env", "BASE_URL=${base_url}",
+          "--env", "IMAGEN_ID=${imagen_id}",
+          "--env", "RONDA=${ronda}",
+          "--env", "PERFIL=${perfil}",
+          "--env", "P95_MS=${p95_ms}",
+          "--env", "RESULTS_DIR=${results_dir}",
+          "chaos/k6/flujo.js"
+        ],
+        "timeout": 600
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "revertir-la-latencia",
+      "secrets": ["caos"],
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "revertir", "--peer", "angel"],
+        "timeout": 30
+      }
+    },
+    {
+      "type": "probe",
+      "name": "despues-no-quedan-fallos-activos",
+      "tolerance": 0,
+      "secrets": ["caos"],
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "sin-fallos"],
+        "timeout": 30
+      }
+    },
+    {
+      "type": "probe",
+      "name": "el-sistema-volvio-al-estado-estable",
+      "tolerance": 0,
+      "provider": {
+        "type": "process",
+        "path": "node",
+        "arguments": ["chaos/probes.js", "flujo", "--max-ms", "${p95_ms}", "--imagen", "${imagen_id}"],
+        "timeout": 45
+      }
+    }
+  ]
+}
