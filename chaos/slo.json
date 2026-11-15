@@ -1,0 +1,20 @@
+{
+  "descripcion": "Umbrales de la puerta de calidad del experimento de caos (release 5). Propuestos antes de medir; se confirman con el estado estable de la ronda 0 sin fallo y quedan registrados en docs/chaos/INFORME_EXPERIMENTO.md.",
+  "metrica_objetivo": "p95 de http_req_duration del flujo GET /api/v5/flujo medido por k6 durante los 5 minutos del perfil declarado",
+  "p95_ms": 2000,
+  "error_rate_max": 0.05,
+  "peticiones_minimas": 300,
+  "perfil": {
+    "herramienta": "k6",
+    "archivo": "chaos/k6/flujo.js",
+    "usuarios_virtuales": 10,
+    "etapas": ["30s subida a 10 VU", "4m sostenido en 10 VU", "30s bajada a 0"],
+    "duracion_total": "5m"
+  },
+  "fallo": {
+    "tipo": "latencia en la llamada saliente",
+    "destino": "angel (API de adopcion, AWS)",
+    "latencia_ms": 3000,
+    "ttl_seconds": 420
+  }
+}
