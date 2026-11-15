@@ -282,3 +282,29 @@ puede aumentar almacenamiento. Cloud SQL, GKE, Cloud Run, Artifact Registry,
 Pub/Sub y Secret Manager ya existentes pueden generar costos independientes.
 No se crean nodos, una base de datos adicional, un segundo clúster ni un
 segundo servicio Cloud Run.
+
+## Release 5: experimento de caos (`chaos.tf`)
+
+`chaos.tf` agrega lo que el coordinador en GKE necesita para la Ingenieria del Caos:
+
+- `google_secret_manager_secret.chaos_token` (`medical-api-chaos-token`): el token del
+  interruptor `/internal/chaos`. El valor se agrega a mano
+  (`gcloud secrets versions add medical-api-chaos-token --data-file=-`) y el mismo valor
+  se guarda como secreto `CHAOS_TOKEN` en GitHub para el workflow `chaos-gate.yml`.
+  El secreto ya existe en el proyecto (creado el 2026-11-16); antes del primer `apply`
+  hay que importarlo al estado:
+  `terraform import google_secret_manager_secret.chaos_token projects/project-40fc41d1-6899-4ce0-9ef/secrets/medical-api-chaos-token`.
+- `google_secret_manager_secret_iam_member.gke_lee_secretos`: `secretAccessor` para
+  `medical-api-gsa` y para el principal de Workload Identity `ns/default/sa/medical-api`
+  sobre el token y sobre `otel-endpoint` / `otel-headers` (los pods de GKE vuelven a
+  exportar trazas y metricas OTLP a Grafana Cloud). Estas seis vinculaciones tambien
+  existen ya; `terraform apply` las deja igual o las importa con
+  `terraform import 'google_secret_manager_secret_iam_member.gke_lee_secretos["chaos_token-gsa"]' "projects/.../secrets/medical-api-chaos-token roles/secretmanager.secretAccessor serviceAccount:medical-api-gsa@..."`.
+- `google_monitoring_dashboard.caos`: tablero "Medical API v5: experimento de caos"
+  sobre las metricas que Managed Prometheus raspa de `/metrics` en GKE
+  (`k8s/pod-monitoring.yaml`): p95 del flujo por ronda, resultado del flujo, latencia
+  y resultado por dependencia, fallo activo, estado del circuit breaker, 5xx y
+  reparto por pod.
+- `google_monitoring_alert_policy.caos_fallo_olvidado`: alerta si
+  `chaos_fault_active` lleva 15 minutos en 1 (mas que el TTL maximo del interruptor).
+  `canal_notificacion_id` recibe el ID del canal de correo creado en Monitoring > Alerting.
