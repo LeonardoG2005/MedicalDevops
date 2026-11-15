@@ -6,6 +6,30 @@ services:
       HOST: 0.0.0.0
       DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: development
+      # Flujo v5 contra los dobles locales de los compañeros (abajo)
+      API_C_URL: http://peer-angel:4101
+      API_A_URL: http://peer-juan:4102
+      RESILIENCE_ENABLED: ${RESILIENCE_ENABLED:-false}
+      CHAOS_ENABLED: "true"
+      CHAOS_TOKEN: ${CHAOS_TOKEN:-token-local-de-desarrollo-123}
     ports:
       - "3000:3000"
     restart: unless-stopped
+
+  # Dobles de las APIs de Angel (AWS) y Juan (OCI) para las rondas locales
+  # del experimento cuando las reales no estan disponibles
+  peer-angel:
+    build: .
+    command: ["node", "chaos/mocks/peer-mock.js", "4101", "angel"]
+    environment:
+      MOCK_DELAY_MS: "0"
+    ports:
+      - "4101:4101"
+
+  peer-juan:
+    build: .
+    command: ["node", "chaos/mocks/peer-mock.js", "4102", "juan"]
+    environment:
+      MOCK_DELAY_MS: "0"
+    ports:
+      - "4102:4102"
