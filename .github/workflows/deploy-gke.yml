@@ -1,0 +1,169 @@
+name: GKE v5 - Desplegar coordinador
+
+# Manual: builds the image by digest, applies the additive migration through
+# the existing Cloud Run migration job and rolls the GKE Deployment (2 replicas,
+# probes, requests/limits). The same workflow switches the experiment round by
+# patching RESILIENCE_ENABLED in the ConfigMap and restarting the pods.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag o rama a desplegar"
+        default: "main"
+        required: true
+      resilience_enabled:
+        description: "Ronda del experimento: false = ronda 0 (sin protecciones), true = ronda 1"
+        type: choice
+        options: ["false", "true"]
+        default: "false"
+        required: true
+      run_migration:
+        description: "Ejecutar scripts/migrate.js antes de desplegar"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gke-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  REGION: us-central1
+  CLUSTER: medical-devops-gke
+  NAMESPACE: default
+  DEPLOYMENT: medical-documents-api
+  REPOSITORY: us-central1-docker.pkg.dev/project-40fc41d1-6899-4ce0-9ef/medical-api/medical-documents-api
+  API_ACCOUNT: medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com
+  SQL_CONNECTION: project-40fc41d1-6899-4ce0-9ef:us-central1:medical-devops-db
+
+jobs:
+  image:
+    name: Construir imagen por digest
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+      sha: ${{ steps.build.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+      - name: Construir y publicar
+        id: build
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          docker build -t "$REPOSITORY:v5-$SHA" .
+          docker push "$REPOSITORY:v5-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "image=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORY:v5-$SHA")" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Migrar y desplegar en GKE
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      # Only adds the chaos_faults table (003). The job and the secret are the
+      # same ones the canary workflow uses, so the DB password never leaves GCP.
+      - name: Migracion (solo agrega objetos)
+        if: ${{ inputs.run_migration }}
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+        run: |
+          gcloud run jobs deploy medical-api-migrate --region=$REGION --image="$IMAGE" \
+            --service-account=$API_ACCOUNT --set-cloudsql-instances=$SQL_CONNECTION \
+            --set-secrets=DATABASE_URL=medical-api-database-url-cloudrun:latest \
+            --command=node --args=scripts/migrate.js --max-retries=0 --task-timeout=300
+          gcloud run jobs execute medical-api-migrate --region=$REGION --wait
+
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.REGION }}
+
+      # Secrets first: if Secret Manager access is missing the sync fails here,
+      # before any pod is touched, and the running replicas keep serving.
+      - name: Identidad y secretos
+        run: |
+          kubectl apply -f k8s/service-account.yaml
+          kubectl apply -f k8s/secret-provider-class.yaml
+          kubectl apply -f k8s/secret-sync.yaml
+          for i in $(seq 1 24); do
+            KEYS=$(kubectl get secret medical-api-secrets -n $NAMESPACE -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys | join(",")' || true)
+            case "$KEYS" in
+              *CHAOS_TOKEN*OTEL_EXPORTER_OTLP_ENDPOINT*) echo "Secret sincronizado: $KEYS"; exit 0 ;;
+            esac
+            echo "Esperando la sincronizacion del Secret ($i)... claves: ${KEYS:-ninguna}"
+            sleep 5
+          done
+          echo "El Secret medical-api-secrets no tiene todas las claves"; exit 1
+
+      - name: Configuracion, servicio y autoscalado
+        run: |
+          kubectl apply -f k8s/config-map.yaml
+          kubectl patch configmap medical-api-config -n $NAMESPACE \
+            --type merge -p "{\"data\":{\"RESILIENCE_ENABLED\":\"${{ inputs.resilience_enabled }}\"}}"
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/pod-monitoring.yaml
+          kubectl apply -f k8s/hpa.yaml
+
+      - name: Desplegar la imagen
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl set image deployment/$DEPLOYMENT -n $NAMESPACE medical-documents-api="$IMAGE"
+          # A ConfigMap change alone does not restart pods; the annotation forces
+          # a rollout even when the image did not change (round switch)
+          kubectl patch deployment $DEPLOYMENT -n $NAMESPACE -p \
+            "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"medical/ronda\":\"${{ inputs.resilience_enabled }}\",\"medical/desplegado\":\"$(date -u +%Y%m%dT%H%M%SZ)\"}}}}}"
+          kubectl rollout status deployment/$DEPLOYMENT -n $NAMESPACE --timeout=600s
+          kubectl get deployment,hpa,pods -n $NAMESPACE -l app=$DEPLOYMENT -o wide
+
+      - name: Prueba de humo
+        run: |
+          IP=$(kubectl get service $DEPLOYMENT -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          test -n "$IP"
+          echo "URL=http://$IP" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do curl -fsS "http://$IP/health" >/dev/null 2>&1 && break; sleep 5; done
+          curl -fsS -D /tmp/h.txt "http://$IP/health" -H "X-Trace-Id: humo-${GITHUB_RUN_ID}"
+          grep -qi "x-app-version: 5.0.0" /tmp/h.txt
+          grep -qi "x-trace-id: humo-${GITHUB_RUN_ID}" /tmp/h.txt
+          # The chaos switch must exist and must refuse calls without the token
+          test "$(curl -s -o /dev/null -w '%{http_code}' "http://$IP/internal/chaos")" = "401"
+          # The flow answers 200, 404 (no images) or 502 (peers down in round 0); anything else is a defect
+          CODE=$(curl -s -o /tmp/f.json -w '%{http_code}' "http://$IP/api/v5/flujo/random")
+          echo "flujo -> $CODE"; cat /tmp/f.json; echo
+          case "$CODE" in 200|404|502) ;; *) exit 1 ;; esac
+          {
+            echo "### Coordinador v5 desplegado en GKE"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| URL | http://$IP |"
+            echo "| Imagen | ${{ needs.image.outputs.image }} |"
+            echo "| Ref | ${{ inputs.ref }} (${{ needs.image.outputs.sha }}) |"
+            echo "| RESILIENCE_ENABLED | ${{ inputs.resilience_enabled }} |"
+            echo "| Flujo de humo | HTTP $CODE |"
+          } >> "$GITHUB_STEP_SUMMARY"
