@@ -1,0 +1,26 @@
+{
+  "veredicto": "APROBADO",
+  "razones": [],
+  "k6": {
+    "peticiones": 413997,
+    "p95_ms": 11.527719999999995,
+    "p99_ms": 17.209815999999993,
+    "error_rate": 0,
+    "degradado_rate": 1,
+    "circuito_abierto_rate": 0.9999275357067805,
+    "angel_p95_ms": 0,
+    "umbrales_rotos": []
+  },
+  "chaos_toolkit": {
+    "status": "completed",
+    "deviated": false,
+    "rollbacks_fallidos": [],
+    "estado_estable_antes": true,
+    "estado_estable_despues": true
+  },
+  "slo": {
+    "p95_ms": 2000,
+    "error_rate_max": 0.05,
+    "peticiones_minimas": 300
+  }
+}
