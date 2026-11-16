@@ -7,3 +7,7 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.*
 terraform/*.tfplan
 terraform/terraform.tfvars
+
+# Logs locales del experimento de caos (los JSON de resultados se versionan como evidencia)
+chaos/results/*.log
+chaostoolkit.log

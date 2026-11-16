@@ -1,0 +1,307 @@
+{
+  "ronda": "1",
+  "perfil": "completo",
+  "base_url": "http://localhost:3000",
+  "imagen_id": "random",
+  "umbrales": {
+    "p95_ms": 2000,
+    "error_rate_max": 0.05
+  },
+  "generado": "2026-11-16T15:09:26.351Z",
+  "state": {
+    "isStdErrTTY": false,
+    "testRunDurationMs": 300001.2693,
+    "isStdOutTTY": false
+  },
+  "metrics": {
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 10,
+        "min": 10,
+        "max": 10
+      }
+    },
+    "dependencia_juan_ms": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 4,
+        "p(99)": 7,
+        "max": 40,
+        "avg": 2.1154259571929264,
+        "min": 0,
+        "med": 2,
+        "p(90)": 4
+      }
+    },
+    "http_reqs": {
+      "values": {
+        "rate": 1379.9841612870136,
+        "count": 413997
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "http_req_tls_handshaking": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 0,
+        "avg": 0,
+        "min": 0
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.019439680239228794,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0.5628039999999979,
+        "max": 6.5019
+      }
+    },
+    "flujo_circuito_abierto": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 413967,
+        "fails": 30,
+        "rate": 0.9999275357067805
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 5.4232,
+        "p(90)": 9.569340000000002,
+        "p(95)": 11.527719999999995,
+        "p(99)": 17.209815999999993,
+        "max": 2022.0919,
+        "avg": 6.2916303081906895,
+        "min": 0
+      }
+    },
+    "iteration_duration": {
+      "values": {
+        "avg": 6.508122615139849,
+        "min": 0,
+        "med": 5.6115,
+        "p(90)": 9.792580000000005,
+        "p(95)": 11.788019999999996,
+        "p(99)": 17.57235199999997,
+        "max": 2022.6742
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 2022.0919,
+        "avg": 6.2916303081906895,
+        "min": 0,
+        "med": 5.4232,
+        "p(90)": 9.569340000000002,
+        "p(95)": 11.527719999999995,
+        "p(99)": 17.209815999999993
+      },
+      "thresholds": {
+        "p(95)<2000": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 2.646303999999998,
+        "max": 21.9992,
+        "avg": 0.22396595071944947,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0.7426,
+        "p(95)": 1.3127
+      }
+    },
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 6.7951,
+        "avg": 0.004652541443537023,
+        "min": 0,
+        "med": 0
+      }
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 0,
+        "med": 5.2321,
+        "p(90)": 9.294980000000004,
+        "p(95)": 11.257819999999995,
+        "p(99)": 16.863804,
+        "max": 2021.0567,
+        "avg": 6.0482246772320405
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.000017862206730966644,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 1.3958
+      }
+    },
+    "dependencia_angel_ms": {
+      "values": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 2012,
+        "avg": 0.14532472457529885,
+        "min": 0,
+        "med": 0
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 413997,
+        "rate": 1379.9841612870136
+      }
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 341735771,
+        "rate": 1139114.417073568
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 1241991,
+        "fails": 0
+      },
+      "thresholds": {
+        "rate>0.95": {
+          "ok": true
+        }
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 1,
+        "min": 0,
+        "max": 10
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 64922539,
+        "rate": 216407.54771299896
+      }
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 413997
+      },
+      "thresholds": {
+        "rate<0.05": {
+          "ok": true
+        },
+        "rate<0.5": {
+          "ok": true
+        }
+      }
+    },
+    "flujo_degradado": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 413997,
+        "fails": 0,
+        "rate": 1
+      }
+    }
+  },
+  "root_group": {
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+      {
+        "id": "188e815b6e6374ff2b2dfda559ffcad9",
+        "passes": 413997,
+        "fails": 0,
+        "name": "estado 200",
+        "path": "::estado 200"
+      },
+      {
+        "name": "trace id devuelto",
+        "path": "::trace id devuelto",
+        "id": "6537f3d9d34e29968d8573579cf30adf",
+        "passes": 413997,
+        "fails": 0
+      },
+      {
+        "path": "::cuerpo con dependencias",
+        "id": "dd98c69dfb530a21fdc6e593dfa1869f",
+        "passes": 413997,
+        "fails": 0,
+        "name": "cuerpo con dependencias"
+      }
+    ],
+    "name": "",
+    "path": ""
+  },
+  "options": {
+    "summaryTimeUnit": "",
+    "noColor": false,
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "p(90)",
+      "p(95)",
+      "p(99)",
+      "max"
+    ]
+  }
+}
