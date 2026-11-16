@@ -1,0 +1,81 @@
+name: Seguridad - Remediacion con aprobacion humana
+
+# Remediacion autonoma de una exposicion del flujo CON aprobacion humana
+# registrada (tendencia del sector: remediacion autonoma con humano en el bucle).
+# La contencion del experimento 1: rotar el token del interruptor de caos
+# cuando una credencial se usa desde un origen no previsto. El environment
+# "produccion-seguridad" exige un revisor: la ejecucion se detiene hasta que
+# una persona aprueba, y GitHub registra quien y cuando (la evidencia de
+# "aprobacion humana registrada"). Nunca corre sola en un push.
+on:
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Por que se rota el token (alerta que lo disparo, id de traza)"
+        required: true
+      confirmar:
+        description: "Escriba ROTAR para confirmar"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: security-remediate
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: project-40fc41d1-6899-4ce0-9ef
+  SECRET: medical-api-chaos-token
+
+jobs:
+  rotar-token:
+    name: Rotar el token del interruptor de caos
+    runs-on: ubuntu-latest
+    # Requiere un revisor configurado en el environment (Settings > Environments)
+    environment: produccion-seguridad
+    timeout-minutes: 15
+    steps:
+      - name: Validar confirmacion
+        if: ${{ inputs.confirmar != 'ROTAR' }}
+        run: |
+          echo "::error::Debe escribir ROTAR en confirmar."
+          exit 1
+
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Rotar el secreto (nueva version) y deshabilitar la anterior
+        run: |
+          NUEVO=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 32)
+          printf '%s' "$NUEVO" | gcloud secrets versions add "$SECRET" --project="$PROJECT_ID" --data-file=-
+          # Deshabilitar la version inmediatamente anterior para cortar el token filtrado
+          ANT=$(gcloud secrets versions list "$SECRET" --project="$PROJECT_ID" --filter="state=ENABLED" --sort-by=~createTime --format="value(name)" | sed -n '2p')
+          if [ -n "$ANT" ]; then gcloud secrets versions disable "$ANT" --secret="$SECRET" --project="$PROJECT_ID"; fi
+          echo "::add-mask::$NUEVO"
+
+      - name: Reiniciar los pods para que tomen el nuevo token
+        run: |
+          gcloud container clusters get-credentials medical-devops-gke --region=us-central1 --project="$PROJECT_ID"
+          kubectl rollout restart deployment/medical-documents-api -n default
+          kubectl rollout status deployment/medical-documents-api -n default --timeout=300s
+
+      - name: Registrar la remediacion
+        run: |
+          {
+            echo "### Token del interruptor de caos rotado"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Motivo | ${{ inputs.motivo }} |"
+            echo "| Aprobado por | reviewer del environment produccion-seguridad |"
+            echo "| Ejecutado por | ${{ github.actor }} |"
+            echo "| Cuando | $(date -u +%FT%TZ) |"
+            echo ""
+            echo "Recordatorio: actualizar el secreto CHAOS_TOKEN de GitHub con el nuevo valor para el chaos gate."
+          } >> "$GITHUB_STEP_SUMMARY"
