@@ -1,0 +1,110 @@
+{
+  "estado_estable": {
+    "t": "2026-11-16T21:43:13.009Z",
+    "ronda": "1",
+    "salud": 200,
+    "auditoria_acceso_datos": [
+      "secretmanager.googleapis.com",
+      "storage.googleapis.com"
+    ],
+    "reglas_publicadas": [
+      "seguridad_chaos_acceso_rechazado",
+      "seguridad_chaos_acceso_origen_no_previsto",
+      "seguridad_identidad_coordinador_impersonada",
+      "seguridad_honeytoken_tocado"
+    ],
+    "reglas_esperadas": [
+      "seguridad_chaos_acceso_rechazado",
+      "seguridad_chaos_acceso_origen_no_previsto",
+      "seguridad_identidad_coordinador_impersonada",
+      "seguridad_honeytoken_tocado"
+    ],
+    "cobertura": {
+      "identidad_app": true,
+      "identidad_gcp": true,
+      "senuelo": true
+    },
+    "rechazos_ultimos_10m": 2
+  },
+  "ronda": "1",
+  "pruebas": {
+    "replay": {
+      "t": "2026-11-16T21:43:20.400Z",
+      "status": 401,
+      "motivo": "token_estatico_rechazado",
+      "rechazado": true,
+      "control_contuvo": true
+    },
+    "alcance": {
+      "t": "2026-11-16T21:43:20.640Z",
+      "status": 401,
+      "motivo": "audiencia_invalida",
+      "rechazado": true,
+      "control_contuvo": true
+    },
+    "honeytoken": {
+      "t": "2026-11-16T21:43:23.909Z",
+      "leido": true,
+      "detalle": "senuelo accedido (debe alertar)"
+    }
+  },
+  "bitacora": [
+    {
+      "t": "2026-11-16T21:43:20.399Z",
+      "evento": "prueba_inicio",
+      "caso": "replay",
+      "attack": "T1550.001"
+    },
+    {
+      "t": "2026-11-16T21:43:20.638Z",
+      "evento": "prueba_fin",
+      "caso": "replay",
+      "status": 401,
+      "motivo": "token_estatico_rechazado"
+    },
+    {
+      "t": "2026-11-16T21:43:20.640Z",
+      "evento": "prueba_inicio",
+      "caso": "alcance",
+      "attack": "T1078.004"
+    },
+    {
+      "t": "2026-11-16T21:43:21.556Z",
+      "evento": "prueba_fin",
+      "caso": "alcance",
+      "status": 401,
+      "motivo": "audiencia_invalida"
+    },
+    {
+      "t": "2026-11-16T21:43:21.556Z",
+      "evento": "prueba_inicio",
+      "caso": "honeytoken",
+      "attack": "T1555.006"
+    },
+    {
+      "t": "2026-11-16T21:43:23.909Z",
+      "evento": "prueba_fin",
+      "caso": "honeytoken",
+      "leido": true
+    }
+  ],
+  "probado_en": "2026-11-16T21:43:23.909Z",
+  "detecciones": {
+    "replay": {
+      "detectado": true,
+      "mttd_s": 4.3,
+      "primera_entrada": "2026-11-16T21:43:24.745368951Z"
+    },
+    "alcance": {
+      "detectado": true,
+      "mttd_s": 4.1,
+      "primera_entrada": "2026-11-16T21:43:24.745368951Z"
+    },
+    "honeytoken": {
+      "detectado": true,
+      "mttd_s": 0.1,
+      "primera_entrada": "2026-11-16T21:43:23.967090169Z"
+    }
+  },
+  "medido_en": "2026-11-16T21:45:52.938Z"
+}

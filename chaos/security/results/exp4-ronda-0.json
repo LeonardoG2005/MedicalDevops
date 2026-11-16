@@ -1,0 +1,61 @@
+{
+  "estado_estable": {
+    "t": "2026-11-16T21:47:15.927Z",
+    "ronda": "0",
+    "objetos_flujo": 12,
+    "versioning": false,
+    "retencion_bloqueada": false,
+    "retencion_s": 0,
+    "copia_aislada": {
+      "existe": true,
+      "region": "US-EAST1",
+      "versioning": false
+    }
+  },
+  "ronda": "0",
+  "bitacora": [
+    {
+      "t": "2026-11-16T21:47:21.092Z",
+      "evento": "destruccion_inicio",
+      "modo": "borrar",
+      "objetos": 12,
+      "attack": "T1485"
+    },
+    {
+      "t": "2026-11-16T21:47:43.198Z",
+      "evento": "destruccion_fin",
+      "objetos_restantes": 0,
+      "bloqueado_por_retencion": false
+    },
+    {
+      "t": "2026-11-16T21:49:26.095Z",
+      "evento": "destruccion_inicio",
+      "modo": "borrar",
+      "objetos": 12,
+      "attack": "T1485"
+    },
+    {
+      "t": "2026-11-16T21:49:48.246Z",
+      "evento": "destruccion_fin",
+      "objetos_restantes": 0,
+      "bloqueado_por_retencion": false
+    }
+  ],
+  "destruccion": {
+    "modo": "borrar",
+    "inicio": "2026-11-16T21:49:26.095Z",
+    "fin": "2026-11-16T21:49:48.246Z",
+    "objetos_antes": 12,
+    "objetos_despues": 0,
+    "rpo_objetos": 12,
+    "copia_intacta": 0,
+    "worm_contuvo": false
+  },
+  "restauracion": {
+    "desde": "versiones",
+    "inicio": "2026-11-16T21:50:05.706Z",
+    "fin": "2026-11-16T21:55:10.907Z",
+    "rto_s": 305.2,
+    "objetos_restaurados": 24
+  }
+}
