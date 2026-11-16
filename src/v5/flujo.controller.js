@@ -73,7 +73,7 @@ async function ejecutarFlujo({ imagen, traceId, caller, faults, metrics, log }) 
   };
 }
 
-function createFlujoHandlers({ caller, faults, metrics }) {
+function createFlujoHandlers({ caller, faults, metrics, archivo }) {
   async function responder(request, reply, imagen) {
     if (!imagen) {
       return reply.code(404).send({ error: 'Imagen no encontrada', traceId: request.id });
@@ -89,6 +89,13 @@ function createFlujoHandlers({ caller, faults, metrics }) {
     reply.header('X-Ronda', resultado.body.ronda);
     if (resultado.degradado) {
       reply.header('X-Degraded', 'true');
+    }
+    // Data of the flow for the group experiment: archived after the answer is
+    // decided, never awaited, so the bucket can be attacked without touching
+    // the latency of the flow
+    if (archivo?.enabled) {
+      archivo.guardar({ traceId: request.id, status: resultado.status, body: resultado.body, ronda: resultado.body.ronda })
+        .then((objeto) => objeto && request.log.info({ evento: 'flujo_archivado', objeto }));
     }
     return reply.code(resultado.status).send(resultado.body);
   }
