@@ -1,0 +1,123 @@
+name: Chaos gate - Experimento de latencia
+
+# Puerta de calidad de Ingenieria del Caos. Ejecuta el experimento declarativo
+# (chaos/experiments/latencia-salida-angel.json) con la carga declarada
+# (chaos/k6/flujo.js) contra el coordinador en GKE y falla si la metrica
+# objetivo (p95 del flujo) no cumple el umbral de chaos/slo.json.
+#
+# Solo manual y solo dentro de una ventana acordada: nunca corre en push.
+# El fallo inyectado siempre se revierte (rollback-strategy=always, paso
+# "Reversion explicita" con if: always() y, como ultima red, el TTL del fallo).
+# No hay continue-on-error: si la carga, el experimento, la medicion o la
+# reversion fallan, el workflow falla y deja la evidencia como artefacto.
+on:
+  workflow_dispatch:
+    inputs:
+      ventana_autorizada:
+        description: "Confirmo que estamos en la ventana acordada con el grupo y que la infraestructura es nuestra"
+        type: boolean
+        default: false
+      ronda:
+        description: "Ronda a medir (debe coincidir con RESILIENCE_ENABLED desplegado: 0=false, 1=true)"
+        type: choice
+        options: ["0", "1"]
+        default: "0"
+      base_url:
+        description: "URL del coordinador (GKE)"
+        default: "http://34.123.58.136"
+      imagen_id:
+        description: "Imagen sobre la que corre el flujo (numero o random)"
+        default: "random"
+      latencia_ms:
+        description: "Latencia a inyectar en la llamada saliente hacia Angel"
+        default: "3000"
+      perfil:
+        description: "Perfil de carga (completo = 5 min, humo = 15 s solo para validar)"
+        type: choice
+        options: ["completo", "humo"]
+        default: "completo"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaos-gate
+  cancel-in-progress: false
+
+env:
+  CHAOS_BASE_URL: ${{ inputs.base_url }}
+  IMAGEN_ID: ${{ inputs.imagen_id }}
+  RONDA: ${{ inputs.ronda }}
+  LATENCIA_MS: ${{ inputs.latencia_ms }}
+  PERFIL: ${{ inputs.perfil }}
+  RESULTS_DIR: chaos/results
+
+jobs:
+  experimento:
+    name: Experimento y puerta de calidad (ronda ${{ inputs.ronda }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Ventana autorizada
+        if: ${{ inputs.ventana_autorizada != true }}
+        run: |
+          echo "::error::El experimento solo corre dentro de una ventana acordada. Marque ventana_autorizada."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Chaos Toolkit
+        run: pip install --quiet "chaostoolkit==1.19.0"
+
+      - uses: grafana/setup-k6-action@v1
+
+      # Validation before touching anything: the experiment file and the k6
+      # script must be well formed, and the coordinator must be reachable
+      - name: Validar experimento, carga y verificar la ronda desplegada
+        run: |
+          chaos validate chaos/experiments/latencia-salida-angel.json
+          k6 inspect chaos/k6/flujo.js >/dev/null
+          node --test test/chaos.gate.test.js
+          curl -fsS -D /tmp/h.txt -o /dev/null "$CHAOS_BASE_URL/api/v5/flujo/$IMAGEN_ID"
+          grep -i "^x-ronda" /tmp/h.txt
+          grep -qi "^x-ronda: $RONDA" /tmp/h.txt || { echo "::error::El coordinador esta en otra ronda (ver X-Ronda). Despliegue con RESILIENCE_ENABLED correcto."; exit 1; }
+
+      - name: Ejecutar el experimento de caos
+        env:
+          CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
+        run: |
+          test -n "$CHAOS_TOKEN"
+          mkdir -p "$RESULTS_DIR"
+          chaos run --rollback-strategy=always \
+            --journal-path "$RESULTS_DIR/journal-ronda-$RONDA.json" \
+            chaos/experiments/latencia-salida-angel.json
+
+      # Even if the step above was cancelled or crashed, the fault is removed
+      # here. This step fails on purpose if the switch still shows a fault.
+      - name: Reversion explicita del fallo
+        if: always()
+        env:
+          CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
+        run: |
+          node chaos/probes.js revertir || true
+          node chaos/probes.js sin-fallos
+
+      - name: Puerta de calidad
+        if: always()
+        run: node chaos/gate.js --ronda "$RONDA" --out "$RESULTS_DIR/gate-ronda-$RONDA.json"
+
+      - name: Guardar evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-ronda-${{ inputs.ronda }}-${{ github.run_number }}
+          path: chaos/results/*.json
+          if-no-files-found: warn

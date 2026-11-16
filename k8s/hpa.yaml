@@ -1,0 +1,22 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: medical-documents-api
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medical-documents-api
+  # Fixed at two replicas during the experiment: both rounds must run with
+  # identical capacity, otherwise a scale-out in one of them would explain the
+  # difference instead of the resilience patterns. Raise maxReplicas after.
+  minReplicas: 2
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60

@@ -1,0 +1,17 @@
+node_modules
+.git
+.github
+coverage
+terraform
+orchestrator
+k8s
+canary
+chaos/results
+docs
+notes
+test
+*.md
+.env
+.env.*
+docker-compose.yml
+CLAUDE.md

@@ -6,7 +6,7 @@ API RESTful académica para gestión de documentos médicos, construida con **Fa
 
 ## Releases
 
-El proyecto creció en cuatro entregas. Cada una tiene su tag en GitHub y este README se organiza por entrega.
+El proyecto creció en cinco entregas. Cada una tiene su tag en GitHub y este README se organiza por entrega.
 
 | Release | Tags | Qué aporta | Dónde corre |
 |---|---|---|---|
@@ -14,8 +14,9 @@ El proyecto creció en cuatro entregas. Cada una tiene su tag en GitHub y este R
 | [v2](#v2-integración-multicloud) | `v2.0.0` | `/api/v2`, integración entre pares, orquestador con Pub/Sub, OpenTelemetry | GKE + Cloud Run |
 | [v3](#v3-infraestructura-como-código) | `v3.0.0`, `v3.1.0` | Terraform con estado remoto en GCS. `v3.1.0` agrega las cabeceras `X-App-Version` y `X-Track` | GKE |
 | [v4](#v4-canary-deployment-en-cloud-run) | `v4.0.0` | `/api/v4`, Canary Deployment con SLOs, puerta de calidad y rollback | Cloud Run |
+| [v5](#v5-ingeniería-del-caos-en-gke) | `v5.0.0` | `/api/v5`: flujo síncrono por las tres nubes con trace id, interruptor de fallos, Chaos Toolkit + k6, dos rondas, tableros y chaos gate | GKE (2 réplicas) |
 
-Las rutas de todas las versiones viven en la misma aplicación (`src/app.js`). Cada carpeta (`src/v2`, `src/v4`) contiene solo lo que esa versión agrega: la v4 no reemplaza a la v2, se suma a ella.
+Las rutas de todas las versiones viven en la misma aplicación (`src/app.js`). Cada carpeta (`src/v2`, `src/v4`, `src/v5`) contiene solo lo que esa versión agrega: la v4 no reemplaza a la v2, se suma a ella.
 
 ## Entidades
 
@@ -418,6 +419,181 @@ Los tres son manuales (*Actions → Run workflow*) y se autentican en GCP por Wo
 
 Los escenarios `falla-*` envían la cabecera `X-Fault` en la carga (`error=0.5` o `latency=3000`), así que la puerta debe abortar en la primera etapa.
 
+## v5: Ingeniería del Caos en GKE
+
+### Objetivo y alcance
+
+La release 5 convierte la API en el **punto de entrada y coordinador** de un flujo síncrono que recorre las tres nubes del grupo, y monta sobre él una plataforma de experimentación de Ingeniería del Caos definida como código: un generador de carga reproducible (k6), una herramienta declarativa (Chaos Toolkit), un interruptor de fallos propio, un experimento versionado con dos rondas de medición, dos tableros y una puerta de calidad en CI/CD. El experimento de Leonardo es **latencia inyectada en la llamada saliente hacia la API de Angel (AWS)**; a Angel y Juan se les entregó una guía de implementación por fuera del repositorio.
+
+| Pieza | Dónde |
+|---|---|
+| Coordinador `GET /api/v5/flujo/:imagenId` y `/api/v5/flujo/random` | `src/v5/` |
+| Trace id en logs, cabeceras y llamadas salientes | `src/trace.js` |
+| Interruptor de fallos (tabla `chaos_faults` + `/internal/chaos`) | `src/chaos/`, `supabase/migrations/003_chaos_faults.sql` |
+| Timeout por dependencia, circuit breaker, respuesta degradada | `src/v5/resilience.js`, `src/v5/flujo.controller.js` |
+| Experimento Chaos Toolkit, k6, sondas, puerta, SLO | `chaos/` (ver `chaos/README.md`) |
+| Kubernetes (2 réplicas, probes, requests/limits, HPA) | `k8s/` (ver `k8s/README.md`) |
+| Workflows: despliegue en GKE y chaos gate | `.github/workflows/deploy-gke.yml`, `chaos-gate.yml` |
+| Tableros: Grafana Cloud (JSON) y Cloud Monitoring (Terraform) | `chaos/grafana/dashboard-caos.json`, `terraform/chaos.tf` |
+| Informe del experimento y evidencia de las rondas | `docs/chaos/INFORME_EXPERIMENTO.md`, `chaos/results/` |
+
+### Arquitectura del flujo
+
+```mermaid
+flowchart LR
+  subgraph Carga["Generador de carga (k6) y Chaos Toolkit"]
+    k6["k6: 10 VU, 5 min<br/>chaos/k6/flujo.js"]
+    ctk["Chaos Toolkit<br/>chaos/experiments/latencia-salida-angel.json"]
+  end
+
+  subgraph GCP["GCP: GKE Autopilot medical-devops-gke (radio de impacto)"]
+    LB["Service LoadBalancer<br/>34.123.58.136"]
+    subgraph Pods["Deployment medical-documents-api, 2 réplicas, probes, requests/limits"]
+      P1["pod 1: coordinador v5"]
+      P2["pod 2: coordinador v5"]
+    end
+    SQL[("Cloud SQL<br/>imagenes + chaos_faults")]
+    GMP["Managed Prometheus<br/>raspa /metrics"]
+  end
+
+  subgraph AWS["AWS: API de adopción (Angel)"]
+    B["GET /api/v2/animals/random"]
+  end
+  subgraph OCI["OCI: API de vuelos (Juan)"]
+    A["GET /api/v2/entidades/vuelos/random"]
+  end
+
+  k6 -->|"GET /api/v5/flujo/random<br/>X-Trace-Id"| LB
+  ctk -->|"POST/DELETE /internal/chaos<br/>X-Chaos-Token"| LB
+  ctk -.->|lanza| k6
+  LB --> P1
+  LB --> P2
+  P1 -->|"1. imagen"| SQL
+  P1 -->|"lee fallos activos"| SQL
+  P1 ==>|"2. animal (X-Trace-Id, traceparent)<br/>PUNTO DE INYECCIÓN: +3000 ms"| B
+  P1 -->|"3. vuelo (X-Trace-Id, traceparent)"| A
+  P1 -.->|"OTLP: trazas + métricas"| GC["Grafana Cloud<br/>Tempo + Prometheus"]
+  GMP --> CM["Cloud Monitoring<br/>tablero terraform/chaos.tf"]
+```
+
+- **Puntos de inyección**: la flecha gruesa hacia AWS. El interruptor actúa dentro del coordinador, sobre la llamada saliente (`src/v5/peer-client.js`), nunca sobre la API de Angel ni sobre la petición entrante.
+- **Frontera del radio de impacto**: el recuadro de GCP. Solo la dependencia `angel` del flujo v5 en los pods del coordinador; las rutas v1/v2/v4, la base de datos, el canary de Cloud Run y las APIs de los compañeros no se tocan.
+- **Dónde se mide cada métrica**: la métrica objetivo (p95 extremo a extremo) la mide k6 desde fuera; el coordinador expone en `/metrics` y por OTLP la latencia por dependencia, el resultado del flujo, el fallo activo y el estado del breaker; Managed Prometheus y Grafana Cloud las guardan.
+
+### Las tres nubes y el flujo en cadena
+
+| Integrante | Nube | Entidad que aporta al flujo | Papel en la release 5 |
+|---|---|---|---|
+| Leonardo | GCP, GKE | Imagen (local) | Coordinador y punto de entrada; Kubernetes; experimento de latencia saliente |
+| Angel | AWS, ECS + ALB | Animal (`/api/v2/animals/random`) | Primera dependencia; experimento de indisponibilidad (5xx sostenidos / caída de task) |
+| Juan | OCI | Vuelo (`/api/v2/entidades/vuelos/random`) | Segunda dependencia; experimento de agotamiento de recursos (pool / concurrencia) |
+
+`GET /api/v5/flujo/:imagenId` busca la imagen, llama a Angel, **después** llama a Juan (en cadena, no en paralelo) y responde:
+
+```json
+{
+  "traceId": "demo-0001", "ronda": "1", "degradado": true,
+  "imagen": { "id": 2, "nombre": "rx_caos.jpg" },
+  "dependencias": {
+    "angel": { "estado": "timeout", "duracion_ms": 2005, "nube": "aws", "entidad": "animal" },
+    "juan":  { "estado": "ok", "duracion_ms": 5, "nube": "oci", "entidad": "vuelo" }
+  },
+  "animal": null,
+  "vuelo": { "id": 50, "numero": "V-050" }
+}
+```
+
+Códigos: `200` (completo o degradado), `404` imagen inexistente, `502` solo en ronda 0 cuando una dependencia falla. Las cabeceras `X-Trace-Id`, `X-Ronda` y `X-Degraded` acompañan toda respuesta. Las rutas v1, v2 y v4 siguen intactas.
+
+### Propagación del trace id
+
+El id de petición de Fastify **es** el trace id (`src/trace.js`): se toma de `X-Trace-Id` si llega con un formato válido (de lo contrario se genera un UUID), aparece como `traceId` en cada línea de log, vuelve en la cabecera `X-Trace-Id` de toda respuesta y viaja en la cabecera `x-trace-id` de cada llamada a los compañeros. En GKE OpenTelemetry está activo (`k8s/config-map.yaml`), así que las llamadas salientes llevan además `traceparent` W3C y los logs incluyen `trace_id` y `span_id` de la traza que llega a Tempo en Grafana Cloud.
+
+### Interruptor de fallos propio
+
+Tabla `chaos_faults` (una fila por compañero: `latency_ms`, `error_rate`, `expires_at`) que todas las réplicas leen con una caché de 3 s. Rutas `POST`, `GET` y `DELETE /internal/chaos`, que solo existen con `CHAOS_ENABLED=true` y exigen la cabecera `X-Chaos-Token` (secreto `medical-api-chaos-token` de Secret Manager, comparado en tiempo constante). Cada fallo tiene TTL obligatorio (máximo 15 min): es la reversión automática aunque la ejecución muera. Latencia máxima 10 s. El fallo se aplica en la llamada saliente, compartiendo la señal de aborto con `fetch`, de modo que el timeout de la ronda 1 corta también la latencia inyectada. La cabecera `X-Fault` de la v4 sigue existiendo solo en el canary de Cloud Run.
+
+### Chaos Toolkit
+
+`chaos/experiments/latencia-salida-angel.json` declara estado estable (sondas `salud` y `flujo` en menos de 2000 ms), hipótesis falsable (en la descripción), método (comprobar que no hay fallos, activar 3000 ms hacia Angel con TTL 420 s, una petición de muestra, k6 con el perfil declarado), radio de impacto, duración, condiciones de aborto y rollbacks (borrar el fallo, verificar lista vacía, verificar estado estable). Las sondas y acciones son `node chaos/probes.js ...` con el proveedor `process`, iguales en Windows y en el runner de CI. Se ejecuta con `chaos run --rollback-strategy=always`.
+
+### k6
+
+`chaos/k6/flujo.js`: perfil fijo de 10 usuarios virtuales en bucle cerrado (30 s subida, 4 min sostenido, 30 s bajada), `GET /api/v5/flujo/random` con `X-Trace-Id` por petición, umbrales `http_req_duration p(95)<2000` (métrica objetivo) y `http_req_failed rate<0.05` (guarda), condición de aborto `rate<0.5` sostenida 60 s, métricas propias `flujo_degradado`, `flujo_circuito_abierto` y latencia por dependencia, y `handleSummary` que escribe `chaos/results/k6-ronda-<N>.json`. El perfil `humo` (15 s) solo valida la configuración.
+
+### Kubernetes
+
+`k8s/deployment.yaml`: 2 réplicas, `startupProbe`, `readinessProbe` y `livenessProbe` sobre `/health`, requests 250m/512Mi y limits 500m/1Gi por contenedor, sidecar Cloud SQL Proxy, secretos desde Secret Manager (`SecretProviderClass` + `SecretSync` con Workload Identity). `hpa.yaml` fija min = max = 2 durante el experimento para que las dos rondas tengan la misma capacidad. `service.yaml` conserva el `LoadBalancer` en `34.123.58.136` (IP efímera: no borrar el Service). `pod-monitoring.yaml` hace que Managed Prometheus raspe `/metrics`. El workflow `deploy-gke.yml` construye la imagen por digest, corre la migración (solo agrega) a través del job de Cloud Run `medical-api-migrate`, aplica primero identidad y secretos (y verifica que el Secret tenga todas las claves antes de tocar pods), luego el resto, y hace una prueba de humo.
+
+### Matriz integrante, fallo, métrica objetivo, patrón de resiliencia
+
+| Integrante | Fallo (rúbrica) | Métrica objetivo | Instrumento y ventana | Patrones de resiliencia |
+|---|---|---|---|---|
+| Leonardo | (a) latencia de 3000 ms en la llamada saliente hacia Angel | p95 extremo a extremo de `GET /api/v5/flujo` (umbral 2000 ms) | k6, 5 min del perfil | timeout por dependencia (2 s) + circuit breaker (opossum, 5 llamadas, 50 %, 10 s) + degradación elegante (200 con campos en `null`). Sin reintentos |
+| Angel | (b) indisponibilidad: 5xx sostenidos o caída de task en ECS | tasa de error del flujo (umbral 5 %) | k6, 5 min | degradación con caché + mamparo / timeout de base de datos (propuesto en su guía) |
+| Juan | (c) agotamiento: pool de conexiones o concurrencia | throughput sostenido o p99 | k6, 5 min | control de admisión / límite de tasa + mamparo con timeout por consulta (propuesto en su guía) |
+
+### Ronda 0 y ronda 1
+
+Las dos rondas corren el **mismo** experimento, carga, fallo, duración e instrumento; solo cambia `RESILIENCE_ENABLED` en el ConfigMap (`false` = ronda 0, `true` = ronda 1), que el workflow `deploy-gke.yml` ajusta y la cabecera `X-Ronda` confirma. En ronda 0 el coordinador hace la llamada sin protección: la latencia se suma entera y, si una dependencia falla, el flujo responde 502 sin llamar a la siguiente (fallo en cascada). En ronda 1 cada dependencia tiene timeout de 2 s, un circuit breaker por compañero (abre tras 5 llamadas con más del 50 % de fallos, prueba de nuevo a los 10 s) y el flujo completa la cadena devolviendo 200 con `degradado: true`. No hay reintentos: contra una latencia, reintentar duplica la presión sobre el compañero lento y la latencia propia.
+
+Resultado de las rondas locales del 2026-11-16 (dobles de los compañeros, mismo código):
+
+| Métrica | Ronda 0 | Ronda 1 | Variación |
+|---|---|---|---|
+| p95 del flujo | 3046 ms | 12 ms | -99.6 % |
+| Tasa de error | 0 % | 0 % | sin cambio |
+| Respuestas degradadas | 0 % | 100 % | respuesta parcial en vez de espera |
+| Hipótesis | refutada | se mantiene | |
+
+La evidencia de estas rondas está en `chaos/results/` (resúmenes de k6, diarios de Chaos Toolkit y veredictos de la puerta). Las rondas sobre la nube quedan pendientes hasta que las APIs de Angel y Juan vuelvan a estar en línea (`docs/chaos/INFORME_EXPERIMENTO.md`).
+
+### Observabilidad
+
+- `/metrics` (Prometheus): `http_request_duration_seconds` y `http_requests_total` con etiqueta `round`, `dependency_request_duration_seconds{peer,outcome}`, `flow_requests_total{outcome}`, `chaos_fault_active{peer,type}` y `circuit_breaker_state{peer}`. Managed Prometheus las lleva a Cloud Monitoring; `terraform/chaos.tf` crea el tablero "Medical API v5: experimento de caos" y la alerta por fallo olvidado (más de 15 min activo).
+- OpenTelemetry: las mismas series más las auto instrumentadas (`http_server_request_duration_seconds`, `http_client_request_duration_seconds` por destino) y las trazas van por OTLP a Grafana Cloud. `chaos/grafana/dashboard-caos.json` es el tablero importable con la ventana de inyección como anotación, las dos rondas y la búsqueda de trazas en Tempo.
+- Logs: pino con `traceId`, `trace_id`, `span_id` y los eventos `flujo_completado`, `flujo_fallido`, `dependencia_fallida`, `chaos_fault_cambiado`.
+
+### Puerta de calidad (chaos gate)
+
+`.github/workflows/chaos-gate.yml` es manual, exige `ventana_autorizada=true`, comprueba que el coordinador esté en la ronda indicada, valida el experimento y el script de k6, ejecuta `chaos run`, revierte el fallo en un paso `if: always()` que falla si el interruptor no queda vacío, evalúa `chaos/gate.js` contra `chaos/slo.json` y sube `chaos/results/*.json` como artefacto. No hay `continue-on-error`: la ausencia de evidencia, un umbral roto, una desviación o un rollback fallido terminan en rojo. La ronda 0 termina en rojo a propósito.
+
+### Ejecución y reversión del experimento
+
+Ver `chaos/README.md`. Reversión en tres capas: rollback de Chaos Toolkit (`DELETE /internal/chaos` + verificación), paso explícito del workflow y TTL del fallo. Interruptor de emergencia: `CHAOS_ENABLED=false` en el ConfigMap y `rollout restart`.
+
+### Qué se conserva, se modifica, se retira o se omite
+
+| Componente | Estado en v5 |
+|---|---|
+| Cluster GKE `medical-devops-gke`, Deployment, Service y HPA de la v2/v3 | **Conservado y actualizado** (`k8s/` vuelve al repositorio con la imagen v5, el interruptor y OTel) |
+| Rutas v1, v2 (`/api/v2/imagenes/:id` con llamadas en paralelo) y v4 | **Conservadas** sin cambios funcionales |
+| Cloud SQL `medical-devops-db` | **Conservada**; la migración 003 solo agrega `chaos_faults` |
+| Servicio Cloud Run `medical-documents-api` (canary v4) | **Conservado**; no participa del flujo v5. Sus workflows `canary-*.yml` pasan a `.disabled` (se reactivan renombrándolos) |
+| Orquestador `medical-orchestrator` + Pub/Sub + bucket de resultados | **Retirados del flujo** (el flujo ahora es síncrono desde el coordinador); los recursos siguen existiendo y Terraform los sigue declarando |
+| Cola, caché, almacenamiento de objetos | **Omitidos a propósito**: la rúbrica no los exige y el flujo síncrono no los necesita |
+| Dashboard y alertas del canary (Terraform) | **Conservados**; se suman el tablero y la alerta del caos |
+
+### Responsabilidades de Angel y Juan
+
+Cada compañero recibió una guía (fuera del repositorio) que detalla contrato, trace id, interruptor, experimento, k6, patrones, tablero, CI/CD, README y pruebas de integración con el coordinador. Lo único que el coordinador exige de cada uno: la ruta `random` de su entidad respondiendo 200 con JSON y devolviendo la cabecera `X-Trace-Id`.
+
+### Limitaciones conocidas y pendientes
+
+- Las APIs de Angel y Juan estaban fuera de línea el 2026-11-16 (la URL de AWS no resuelve; la de OCI responde 404). Las rondas sobre la nube y el informe final dependen de que vuelvan.
+- El estado del circuit breaker es por pod (dos réplicas, dos circuitos). Compartirlo exigiría Redis o Memorystore, fuera del alcance.
+- `/internal/chaos` está detrás de la IP pública del Service; lo protegen el token, `CHAOS_ENABLED`, el TTL máximo, el tope de latencia y la alerta.
+- Autopilot reescribe los limits al valor de los requests; es comportamiento esperado.
+- La imagen desplegada el 2026-11-16 se construyó desde el árbol de trabajo (tag `v5-735f91b-wip`); tras el commit y el tag `v5.0.0` hay que volver a desplegar con `deploy-gke.yml`.
+
+### Despliegue y validación seguros
+
+1. Prerrequisitos una sola vez: secreto `medical-api-chaos-token` (hecho el 2026-11-16), permisos `secretAccessor` para `medical-api-gsa` y el principal de Workload Identity sobre ese secreto y sobre `otel-endpoint` / `otel-headers` (hechos), secreto `CHAOS_TOKEN` en GitHub con el mismo valor (hecho).
+2. `deploy-gke.yml` con `ref=v5.0.0` y `resilience_enabled=false` para la ronda 0; prueba de humo automática.
+3. `chaos-gate.yml` con `ronda=0` y `ventana_autorizada=true` (rojo esperado), luego `deploy-gke.yml` con `resilience_enabled=true` y `chaos-gate.yml` con `ronda=1` (verde esperado).
+4. `terraform apply` (por el workflow `terraform-gcp.yaml` al fusionar en `main`) crea el tablero y la alerta; antes, importar el secreto ya existente (ver `terraform/README.md`).
+5. Importar `chaos/grafana/dashboard-caos.json` en Grafana Cloud.
+
 ## Cómo correr en local
 
 ```bash
@@ -429,8 +605,10 @@ npm run db:migrate
 npm run dev
 ```
 
-O con Docker:
+O con Docker (incluye los dobles de las APIs de Angel y Juan para el flujo v5):
 
 ```bash
 docker compose up --build
 ```
+
+Rondas locales del experimento de caos: `chaos/README.md`.

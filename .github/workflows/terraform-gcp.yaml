@@ -72,6 +72,10 @@ jobs:
           test/medical-notes.test.js
           test/v4.notes.test.js
           test/fault-injection.test.js
+          test/v5.flujo.test.js
+          test/v5.resilience.test.js
+          test/chaos.switch.test.js
+          test/chaos.gate.test.js
       - run: npm ci --prefix orchestrator
       - run: npm test --prefix orchestrator
 

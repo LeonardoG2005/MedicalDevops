@@ -31,7 +31,7 @@ async function ensureSchema() {
 
 async function resetDatabase() {
   await ensureSchema();
-  await pool.query('TRUNCATE TABLE documentos_generados, notas_medicas, imagenes RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE TABLE documentos_generados, notas_medicas, imagenes, chaos_faults RESTART IDENTITY CASCADE');
 }
 
 async function createImage(payload = {}) {
