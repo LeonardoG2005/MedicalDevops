@@ -22,8 +22,14 @@ variable "canal_notificacion_id" {
   default     = ""
 }
 
-# The value is added by hand (gcloud secrets versions add) so it never goes
-# through Terraform state. The same value lives in GitHub as CHAOS_TOKEN.
+# The secret was created by hand on 2026-11-16 (the value never goes through
+# Terraform state; the same value lives in GitHub as CHAOS_TOKEN). This import
+# block makes the first apply adopt it instead of failing with 409.
+import {
+  to = google_secret_manager_secret.chaos_token
+  id = "projects/${var.project_id}/secrets/medical-api-chaos-token"
+}
+
 resource "google_secret_manager_secret" "chaos_token" {
   secret_id = "medical-api-chaos-token"
   project   = var.project_id
