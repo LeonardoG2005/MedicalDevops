@@ -1,0 +1,104 @@
+{
+  "id": "seguridad_objetos_flujo_borrados",
+  "titulo": "Borrado o sobrescritura de los objetos del flujo en el bucket de resultados",
+  "capa": "datos",
+  "propietario": "grupo (ejecuta Leonardo en GCP)",
+  "experimento": 4,
+  "fuente": "Cloud Audit Logs data_write de Cloud Storage sobre el bucket medical-devops-400345348270-results",
+  "attack": [
+    "T1485 Data Destruction",
+    "T1486 Data Encrypted for Impact",
+    "T1565.001 Data Manipulation: Stored Data Manipulation"
+  ],
+  "d3fend": [
+    "D3-RAPA Resource Access Pattern Analysis",
+    "D3-RF Restore File"
+  ],
+  "severidad": "CRITICAL",
+  "umbral": "1 evento",
+  "terraform": "google_logging_metric.seguridad[\"objetos_flujo_borrados\"]",
+  "filtro": "resource.type=\"gcs_bucket\" AND resource.labels.bucket_name=\"medical-devops-400345348270-results\" AND (protoPayload.methodName=\"storage.objects.delete\" OR protoPayload.methodName=\"storage.objects.update\" OR protoPayload.methodName=\"storage.objects.rewrite\")",
+  "casos": {
+    "positivos": [
+      {
+        "nombre": "borrado masivo de flujo/*.json",
+        "entrada": {
+          "resource": {
+            "type": "gcs_bucket",
+            "labels": {
+              "bucket_name": "medical-devops-400345348270-results"
+            }
+          },
+          "protoPayload": {
+            "methodName": "storage.objects.delete",
+            "resourceName": "projects/_/buckets/medical-devops-400345348270-results/objects/flujo/abc.json",
+            "authenticationInfo": {
+              "principalEmail": "persona@gmail.com"
+            }
+          }
+        }
+      },
+      {
+        "nombre": "sobrescritura (cifrado simulado) con rewrite",
+        "entrada": {
+          "resource": {
+            "type": "gcs_bucket",
+            "labels": {
+              "bucket_name": "medical-devops-400345348270-results"
+            }
+          },
+          "protoPayload": {
+            "methodName": "storage.objects.rewrite"
+          }
+        }
+      }
+    ],
+    "negativos": [
+      {
+        "nombre": "el coordinador archiva un flujo (create)",
+        "entrada": {
+          "resource": {
+            "type": "gcs_bucket",
+            "labels": {
+              "bucket_name": "medical-devops-400345348270-results"
+            }
+          },
+          "protoPayload": {
+            "methodName": "storage.objects.create",
+            "authenticationInfo": {
+              "principalEmail": "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com"
+            }
+          }
+        }
+      },
+      {
+        "nombre": "borrado en otro bucket",
+        "entrada": {
+          "resource": {
+            "type": "gcs_bucket",
+            "labels": {
+              "bucket_name": "otro-bucket"
+            }
+          },
+          "protoPayload": {
+            "methodName": "storage.objects.delete"
+          }
+        }
+      },
+      {
+        "nombre": "lectura de un objeto",
+        "entrada": {
+          "resource": {
+            "type": "gcs_bucket",
+            "labels": {
+              "bucket_name": "medical-devops-400345348270-results"
+            }
+          },
+          "protoPayload": {
+            "methodName": "storage.objects.get"
+          }
+        }
+      }
+    ]
+  }
+}

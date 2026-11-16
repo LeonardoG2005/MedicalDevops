@@ -1,0 +1,40 @@
+{
+  "id": "seguridad_honeytoken_tocado",
+  "titulo": "Honeytoken: lectura del secreto senuelo medical-api-admin-backup-key",
+  "capa": "deteccion y respuesta (engano)",
+  "propietario": "Leonardo",
+  "experimento": 1,
+  "fuente": "Cloud Audit Logs data_access de Secret Manager (AccessSecretVersion sobre el secreto senuelo). Tendencia instrumentada: honeytoken en el flujo con alerta al ser tocado.",
+  "attack": ["T1552.007 Unsecured Credentials: Container API", "T1555.006 Credentials from Password Stores: Cloud Secrets Management Stores"],
+  "d3fend": ["D3-DUC Decoy User Credential", "D3-DO Decoy Object"],
+  "severidad": "CRITICAL",
+  "umbral": "1 evento",
+  "terraform": "google_logging_metric.seguridad[\"honeytoken_tocado\"]",
+  "filtro": "protoPayload.methodName=\"google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion\" AND protoPayload.resourceName:\"secrets/medical-api-admin-backup-key\"",
+  "casos": {
+    "positivos": [
+      {
+        "nombre": "lectura del senuelo con gcloud",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion", "resourceName": "projects/400345348270/secrets/medical-api-admin-backup-key/versions/latest", "authenticationInfo": { "principalEmail": "persona@gmail.com" } } }
+      },
+      {
+        "nombre": "lectura del senuelo por una version concreta",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion", "resourceName": "projects/400345348270/secrets/medical-api-admin-backup-key/versions/1" } }
+      }
+    ],
+    "negativos": [
+      {
+        "nombre": "lectura legitima del token del caos por los pods",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion", "resourceName": "projects/400345348270/secrets/medical-api-chaos-token/versions/latest" } }
+      },
+      {
+        "nombre": "listar secretos (no leer el valor)",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.ListSecrets", "resourceName": "projects/400345348270" } }
+      },
+      {
+        "nombre": "leer metadatos del senuelo sin el valor",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.GetSecret", "resourceName": "projects/400345348270/secrets/medical-api-admin-backup-key" } }
+      }
+    ]
+  }
+}
