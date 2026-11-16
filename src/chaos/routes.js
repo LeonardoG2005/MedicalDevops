@@ -1,17 +1,10 @@
-const crypto = require('node:crypto');
 const { PEERS } = require('./repository');
+const { verifyToken, isWithinWindow, readTokenConfig } = require('./token');
 
 const TOKEN_HEADER = 'x-chaos-token';
 const MIN_TOKEN_LENGTH = 16;
 const MAX_TTL_SECONDS = 900;
 const MAX_LATENCY_MS = 10000;
-
-function tokenMatches(provided, expected) {
-  if (typeof provided !== 'string' || provided.length !== expected.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-}
 
 const faultBodySchema = {
   type: 'object',
@@ -53,11 +46,28 @@ async function chaosRoutes(app, { repository, cache }) {
     throw new Error(`CHAOS_TOKEN debe tener al menos ${MIN_TOKEN_LENGTH} caracteres cuando CHAOS_ENABLED=true`);
   }
 
+  // Identity of the caller (security game day, experiment 1). Every decision
+  // is logged with the same fields so Cloud Logging can turn them into the
+  // detection rules of chaos/security/detecciones.
+  const identidad = readTokenConfig();
+  const origen = (request) => ({
+    ip: request.headers['x-forwarded-for']?.split(',')[0]?.trim() || request.ip,
+    agente: request.headers['user-agent']?.slice(0, 120) || null,
+  });
   app.addHook('preHandler', async (request, reply) => {
-    if (!tokenMatches(request.headers[TOKEN_HEADER], token)) {
-      request.log.warn({ evento: 'chaos_token_invalido', ruta: request.url });
-      return reply.code(401).send({ error: 'No autorizado', traceId: request.id });
+    const base = { ruta: request.url, metodo: request.method, modo: identidad.mode, ...origen(request) };
+    const veredicto = verifyToken(request.headers[TOKEN_HEADER], {
+      key: token, mode: identidad.mode, audience: identidad.audience,
+    });
+    if (!veredicto.ok) {
+      request.log.warn({ evento: 'chaos_acceso_rechazado', motivo: veredicto.motivo, tipo_token: veredicto.tipo, audiencia: veredicto.audiencia || null, ...base });
+      return reply.code(401).send({ error: 'No autorizado', motivo: veredicto.motivo, traceId: request.id });
     }
+    if (!isWithinWindow(identidad.window)) {
+      request.log.warn({ evento: 'chaos_acceso_rechazado', motivo: 'fuera_de_ventana', tipo_token: veredicto.tipo, audiencia: veredicto.audiencia || null, ...base });
+      return reply.code(403).send({ error: 'Fuera de la ventana autorizada', motivo: 'fuera_de_ventana', traceId: request.id });
+    }
+    request.log.info({ evento: 'chaos_acceso', tipo_token: veredicto.tipo, audiencia: veredicto.audiencia || null, expira: veredicto.expira || null, ...base });
   });
 
   app.get('/internal/chaos', {
@@ -94,4 +104,4 @@ async function chaosRoutes(app, { repository, cache }) {
   }, async (request) => borrar(request, request.params.peer));
 }
 
-module.exports = { chaosRoutes, tokenMatches, TOKEN_HEADER, MAX_TTL_SECONDS, MAX_LATENCY_MS };
+module.exports = { chaosRoutes, TOKEN_HEADER, MAX_TTL_SECONDS, MAX_LATENCY_MS };
