@@ -546,7 +546,7 @@ Resultado de las rondas locales del 2026-11-16 (dobles de los compañeros, mismo
 | Respuestas degradadas | 0 % | 100 % | respuesta parcial en vez de espera |
 | Hipótesis | refutada | se mantiene | |
 
-La evidencia de estas rondas está en `chaos/results/` (resúmenes de k6, diarios de Chaos Toolkit y veredictos de la puerta). Las rondas sobre la nube quedan pendientes hasta que las APIs de Angel y Juan vuelvan a estar en línea (`docs/chaos/INFORME_EXPERIMENTO.md`).
+La evidencia de estas rondas está en `chaos/results/` (resúmenes de k6, diarios de Chaos Toolkit y veredictos de la puerta). Las rondas sobre la nube quedan pendientes hasta que la API de Juan vuelva a estar en línea; la de Angel ya responde desde el 2026-11-16 (`docs/chaos/INFORME_EXPERIMENTO.md`).
 
 ### Observabilidad
 
@@ -580,7 +580,8 @@ Cada compañero recibió una guía (fuera del repositorio) que detalla contrato,
 
 ### Limitaciones conocidas y pendientes
 
-- Las APIs de Angel y Juan estaban fuera de línea el 2026-11-16 (la URL de AWS no resuelve; la de OCI responde 404). Las rondas sobre la nube y el informe final dependen de que vuelvan.
+- La API de Angel volvió a estar en línea el 2026-11-16 en `http://pet-adoption-demo-alb-66249762.us-east-1.elb.amazonaws.com` (versión 2 del secreto `medical-api-api-c-url`). Verificado desde GKE: `dependencias.angel.estado = "ok"` con el `X-Trace-Id` propagado. La API de Juan no tiene hoy un despliegue público: su clúster OKE se eliminó, la IP de `157-137-193-66.sslip.io` ya sirve otra aplicación (404 en todas las rutas), el balanceador de OCI de su despliegue de octubre (`157.137.198.114`) ya no responde y sus servicios de Render tampoco. Su propio informe declara que su experimento, ya medido con k6, corrió en local. Su código sí cumple el contrato (`/api/v2/entidades/vuelos/random` y eco de `X-Trace-Id`); falta que lo despliegue con su `terraform-oci.yml`. Mientras tanto, en ronda 0 el flujo completo termina en 502 por Juan, y las rondas sobre la nube del experimento de latencia esperan su despliegue.
+- Los experimentos de Angel y de Leonardo tocan la misma dependencia del flujo (la llamada a la API de adopción). Se ejecutan en ventanas separadas para no contaminar las mediciones (`chaos/README.md`, sección de coordinación).
 - El estado del circuit breaker es por pod (dos réplicas, dos circuitos). Compartirlo exigiría Redis o Memorystore, fuera del alcance.
 - `/internal/chaos` está detrás de la IP pública del Service; lo protegen el token, `CHAOS_ENABLED`, el TTL máximo, el tope de latencia y la alerta.
 - Autopilot reescribe los limits al valor de los requests; es comportamiento esperado.

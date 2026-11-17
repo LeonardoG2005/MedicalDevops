@@ -3,7 +3,8 @@
 Proyecto MedicalDevOps. Coordinador en GCP/GKE (Leonardo). Maximo 10 paginas.
 Estado: experimentos 1 y 4 ejecutados en la nube el 2026-11-16 con evidencia
 real; experimentos 2 (Angel, AWS) y 3 (Juan, OCI) pendientes de sus repositorios
-(sus APIs seguian caidas). Las celdas marcadas PENDIENTE se completan cuando los
+(la API de Angel volvio a estar en linea el 2026-11-16; la de Juan sigue en 404).
+Las celdas marcadas PENDIENTE se completan cuando los
 tres repositorios esten listos.
 
 ## 1. Inventario de controles por capa

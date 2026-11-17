@@ -102,6 +102,42 @@ Ejemplo con las rondas locales del 2026-11-16 (dobles de los compañeros, 3000 m
 
 El informe completo, con las rondas sobre la nube, esta en `docs/chaos/INFORME_EXPERIMENTO.md`.
 
+## Coordinacion de ventanas entre los tres experimentos
+
+Los tres experimentos comparten el flujo `GET /api/v5/flujo` y dos de ellos tocan la misma dependencia (la
+llamada del coordinador a la API de adopcion). Si se solapan, cada uno contamina la medicion del otro.
+
+Que pasa durante la ronda 0 de Angel (unos 5 minutos de carga, hasta 7 de TTL):
+
+- Su interruptor hace fallar el 100 % de las consultas `animal.findRandom`, asi que
+  `GET /api/v2/animals/random` responde 500. Su `/api/health` sigue en 200 y RDS no se modifica.
+- El coordinador ve `dependencias.angel.estado = "error"` (detalle "respondio 500").
+  Con el coordinador en ronda 0 el flujo responde 502 y **no llega a llamar a Juan** (fallo en cascada).
+  Con el coordinador en ronda 1 el circuito hacia Angel se abre tras 5 fallos y el flujo responde 200
+  degradado con `animal: null`; Juan si se llama.
+- En la ronda 1 de Angel su API responde 200 con el ultimo animal conocido (`degradado: true`), y el
+  coordinador lo ve como `estado = "ok"`.
+- Mientras Juan siga en 404 el flujo ya responde 502 en ronda 0 por Juan; lo que distingue la ventana de
+  Angel es `dependencias.angel.estado`.
+
+Reglas acordadas:
+
+1. Ventanas sin solapamiento, una tras otra, de unos 15 minutos cada una (5 de carga, hasta 7 de TTL y
+   las comprobaciones): Angel ronda 0, Angel ronda 1, Leonardo ronda 0, Leonardo ronda 1, Juan ronda 0,
+   Juan ronda 1. Los experimentos de seguridad van en otra ventana.
+2. Durante la ventana de un integrante, los otros dos no generan carga contra el flujo ni contra su API
+   (sin k6, sin `chaos-gate.yml`). La carga extra cambiaria el perfil P declarado por quien mide.
+3. El coordinador queda fijo en la ronda que se acuerde para la ventana (por defecto ronda 0 durante
+   la ronda 0 del companero). Se confirma con la cabecera `X-Ronda` antes de empezar.
+4. Prefijo de trace id por ventana para correlacionar en Grafana y en los logs de las tres nubes:
+   `gameday-<integrante>-r<ronda>-...`.
+5. Cada uno sabe parar a los demas: Angel con `DELETE /internal/chaos` en su API o el TTL; Leonardo con
+   `node chaos/probes.js revertir` o el TTL; Juan con su interruptor. Al terminar, `sin-fallos` en verde.
+6. Mi experimento de latencia sobre la nube necesita a Juan en linea (con Juan en 404 la ronda 0 siempre
+   responde 502 y la metrica deja de ser comparable). Hasta entonces la evidencia es la de las rondas
+   locales. Al 2026-11-17 Juan no tiene despliegue publico (su informe dice que corrio en local); su
+   codigo cumple el contrato y falta que despliegue con `terraform-oci.yml`.
+
 ## En CI
 
 `.github/workflows/chaos-gate.yml` (manual, con `ventana_autorizada=true`) instala k6 y Chaos Toolkit,
