@@ -1,0 +1,53 @@
+{
+  "estado_estable": {
+    "t": "2026-11-16T21:56:43.199Z",
+    "ronda": "1",
+    "objetos_flujo": 12,
+    "versioning": false,
+    "retencion_bloqueada": false,
+    "retencion_s": 0,
+    "copia_aislada": {
+      "existe": true,
+      "region": "US-EAST1",
+      "versioning": false
+    }
+  },
+  "ronda": "1",
+  "bitacora": [
+    {
+      "t": "2026-11-16T21:57:22.391Z",
+      "evento": "destruccion_inicio",
+      "modo": "borrar",
+      "objetos": 12,
+      "attack": "T1485"
+    },
+    {
+      "t": "2026-11-16T21:57:44.471Z",
+      "evento": "destruccion_fin",
+      "objetos_restantes": 0,
+      "bloqueado_por_retencion": false
+    }
+  ],
+  "destruccion": {
+    "modo": "borrar",
+    "inicio": "2026-11-16T21:57:22.391Z",
+    "fin": "2026-11-16T21:57:44.471Z",
+    "objetos_antes": 12,
+    "objetos_despues": 0,
+    "rpo_objetos": 0,
+    "copia_intacta": 12,
+    "worm_contuvo": false
+  },
+  "restauracion": {
+    "desde": "copia",
+    "inicio": "2026-11-16T21:57:52.936Z",
+    "fin": "2026-11-16T21:58:13.060Z",
+    "rto_s": 20.1,
+    "objetos_restaurados": 12
+  },
+  "worm_copia": {
+    "probado": true,
+    "resultado": "HTTP 403: subject to retention policy, cannot be deleted or overwritten until 2026-11-23",
+    "retencion": "7 dias en la copia aislada (us-east1)"
+  }
+}

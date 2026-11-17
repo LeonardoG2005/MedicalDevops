@@ -1,0 +1,44 @@
+{
+  "id": "seguridad_chaos_acceso_rechazado",
+  "titulo": "Credenciales invalidas, vencidas o fuera de ventana contra el interruptor de caos",
+  "capa": "identidad",
+  "propietario": "Leonardo",
+  "experimento": 1,
+  "fuente": "Cloud Logging, bitacora JSON del contenedor medical-documents-api (jsonPayload.evento=chaos_acceso_rechazado)",
+  "attack": ["T1078.004 Valid Accounts: Cloud Accounts", "T1550.001 Use Alternate Authentication Material: Application Access Token"],
+  "d3fend": ["D3-RAPA Resource Access Pattern Analysis", "D3-ACH Application Configuration Hardening"],
+  "severidad": "WARNING",
+  "umbral": "mas de 5 eventos en 5 minutos",
+  "terraform": "google_logging_metric.seguridad[\"chaos_acceso_rechazado\"]",
+  "filtro": "resource.type=\"k8s_container\" AND resource.labels.cluster_name=\"medical-devops-gke\" AND resource.labels.namespace_name=\"default\" AND resource.labels.container_name=\"medical-documents-api\" AND jsonPayload.evento=\"chaos_acceso_rechazado\"",
+  "casos": {
+    "positivos": [
+      {
+        "nombre": "token estatico filtrado usado en modo efimero",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso_rechazado", "motivo": "token_estatico_rechazado", "tipo_token": "estatico", "ip": "190.1.2.3", "agente": "python-requests/2.32" } }
+      },
+      {
+        "nombre": "token efimero vencido reutilizado",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso_rechazado", "motivo": "token_expirado", "tipo_token": "efimero", "ip": "10.96.0.4", "agente": "node" } }
+      },
+      {
+        "nombre": "llamada fuera de la ventana acordada",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso_rechazado", "motivo": "fuera_de_ventana", "tipo_token": "efimero", "agente": "node" } }
+      }
+    ],
+    "negativos": [
+      {
+        "nombre": "acceso aceptado normal del runner",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "efimero", "agente": "node" } }
+      },
+      {
+        "nombre": "peticion normal del flujo",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "flujo_completado", "ronda": "1" } }
+      },
+      {
+        "nombre": "mismo evento en otro contenedor (sidecar)",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "cloud-sql-proxy" } }, "jsonPayload": { "evento": "chaos_acceso_rechazado" } }
+      }
+    ]
+  }
+}

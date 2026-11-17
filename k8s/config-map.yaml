@@ -20,6 +20,16 @@ data:
   # "false" and restart). The token comes from Secret Manager, see
   # secret-provider-class.yaml.
   CHAOS_ENABLED: "true"
+  # Identity of the chaos switch (security game day, experiment 1):
+  # "estatico" = round 0 (shared secret accepted as is), "efimero" = round 1
+  # (only short lived tokens bound to CHAOS_AUDIENCE; the secret is rejected on
+  # the wire). CHAOS_WINDOW limits every call to the agreed window, e.g.
+  # "2026-11-18T08:00:00-05:00/2026-11-18T12:00:00-05:00"; empty = no window.
+  CHAOS_TOKEN_MODE: "estatico"
+  CHAOS_AUDIENCE: "chaos-gate"
+  CHAOS_WINDOW: ""
+  # Each flow execution is archived as flujo/<traceId>.json (group experiment 4)
+  FLOW_ARCHIVE_BUCKET: "medical-devops-400345348270-results"
   # OpenTelemetry: traces and the experiment metrics go to Grafana Cloud over
   # OTLP. Logs stay on stdout (Cloud Logging) and the Prometheus /metrics
   # endpoint is scraped by Managed Prometheus (pod-monitoring.yaml).

@@ -1,0 +1,44 @@
+{
+  "id": "seguridad_chaos_acceso_origen_no_previsto",
+  "titulo": "Credencial valida del interruptor usada desde un origen no previsto",
+  "capa": "identidad",
+  "propietario": "Leonardo",
+  "experimento": 1,
+  "fuente": "Cloud Logging, jsonPayload.evento=chaos_acceso con agente fuera de la lista de la plataforma (node, undici, k6-medical-chaos, curl)",
+  "attack": ["T1078.004 Valid Accounts: Cloud Accounts", "T1550.001 Use Alternate Authentication Material: Application Access Token"],
+  "d3fend": ["D3-RAPA Resource Access Pattern Analysis", "D3-UAP User Account Permissions"],
+  "severidad": "CRITICAL",
+  "umbral": "1 evento",
+  "terraform": "google_logging_metric.seguridad[\"chaos_acceso_origen_no_previsto\"]",
+  "filtro": "resource.type=\"k8s_container\" AND resource.labels.cluster_name=\"medical-devops-gke\" AND resource.labels.namespace_name=\"default\" AND resource.labels.container_name=\"medical-documents-api\" AND jsonPayload.evento=\"chaos_acceso\" AND NOT jsonPayload.agente=~\"^(node|undici|k6-medical-chaos|curl)\"",
+  "casos": {
+    "positivos": [
+      {
+        "nombre": "token estatico replicado desde python en ronda 0",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "estatico", "modo": "estatico", "agente": "python-requests/2.32", "ip": "190.1.2.3" } }
+      },
+      {
+        "nombre": "token efimero robado usado desde un navegador",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "efimero", "agente": "Mozilla/5.0 (Windows NT 10.0)" } }
+      },
+      {
+        "nombre": "sin agente de usuario",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "estatico", "agente": null } }
+      }
+    ],
+    "negativos": [
+      {
+        "nombre": "sonda de Chaos Toolkit (node)",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "efimero", "agente": "node" } }
+      },
+      {
+        "nombre": "reversion explicita del workflow (curl)",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso", "tipo_token": "efimero", "agente": "curl/8.5.0" } }
+      },
+      {
+        "nombre": "rechazo (lo cubre la regla 01, no esta)",
+        "entrada": { "resource": { "type": "k8s_container", "labels": { "cluster_name": "medical-devops-gke", "namespace_name": "default", "container_name": "medical-documents-api" } }, "jsonPayload": { "evento": "chaos_acceso_rechazado", "agente": "python-requests/2.32" } }
+      }
+    ]
+  }
+}

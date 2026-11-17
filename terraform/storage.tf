@@ -13,6 +13,15 @@ resource "google_storage_bucket" "workflow_results" {
     enabled = true
   }
 
+  # Ronda 1 del experimento 4: inmutabilidad (WORM). Ningun principal, ni el
+  # dueno del proyecto, puede borrar ni sobrescribir un objeto antes de 24 h.
+  # El bloqueo es irreversible por diseno; la regla de ciclo de vida de 30 dias
+  # sigue limpiando lo viejo.
+  retention_policy {
+    retention_period = 86400
+    is_locked        = true
+  }
+
   lifecycle_rule {
     condition {
       age = 30

@@ -76,6 +76,10 @@ jobs:
           test/v5.resilience.test.js
           test/chaos.switch.test.js
           test/chaos.gate.test.js
+          test/chaos.token.test.js
+          test/v5.archivo.test.js
+          test/seguridad.detecciones.test.js
+          test/seguridad.ia.test.js
       - run: npm ci --prefix orchestrator
       - run: npm test --prefix orchestrator
 

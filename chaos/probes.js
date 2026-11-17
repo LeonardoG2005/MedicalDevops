@@ -9,10 +9,20 @@
 //   node chaos/probes.js sin-fallos                 GET /internal/chaos devuelve una lista vacia
 //   node chaos/probes.js activar --peer angel --latencia 3000 --ttl 420
 //   node chaos/probes.js revertir [--peer angel]
+//   node chaos/probes.js token [--ttl 300] [--aud chaos-gate]   token efimero (ronda 1 de seguridad)
 //
 // Variables: CHAOS_BASE_URL (o BASE_URL), IMAGEN_ID, CHAOS_TOKEN, RONDA.
+const { mintToken } = require('../src/chaos/token');
+
 const BASE_URL = (process.env.CHAOS_BASE_URL || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const TOKEN = process.env.CHAOS_TOKEN || '';
+// Round 1 of the security experiment: the shared secret never travels; a short
+// lived token bound to CHAOS_AUDIENCE is minted for each call instead
+const TOKEN_MODE = process.env.CHAOS_TOKEN_MODE || 'estatico';
+const AUDIENCE = process.env.CHAOS_AUDIENCE || 'chaos-gate';
+function credencial() {
+  return TOKEN_MODE === 'efimero' ? mintToken({ key: TOKEN, audience: AUDIENCE, ttlSeconds: 300 }) : TOKEN;
+}
 const IMAGEN_ID = process.env.IMAGEN_ID || 'random';
 
 function parseArgs(argv) {
@@ -36,7 +46,7 @@ function salida(ok, data) {
 
 async function pedir(method, path, { body, auth = false, timeoutMs = 15000 } = {}) {
   const headers = { accept: 'application/json' };
-  if (auth) headers['x-chaos-token'] = TOKEN;
+  if (auth) headers['x-chaos-token'] = credencial();
   if (body) headers['content-type'] = 'application/json';
   const startedAt = Date.now();
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -88,6 +98,14 @@ const comandos = {
     };
     const r = await pedir('POST', '/internal/chaos', { auth: true, body });
     salida(r.status === 201, { status: r.status, fallo: r.json });
+  },
+
+  // Mint a token for a demo or for a script that does not use probes.js
+  async token(args) {
+    const ttl = Number(args.ttl || 300);
+    const aud = args.aud || AUDIENCE;
+    const valor = mintToken({ key: TOKEN, audience: aud, ttlSeconds: ttl });
+    salida(true, { audiencia: aud, ttl_seconds: ttl, token: valor });
   },
 
   async revertir(args) {

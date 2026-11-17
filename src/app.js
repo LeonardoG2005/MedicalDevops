@@ -18,6 +18,7 @@ const { chaosRoutes } = require('./chaos/routes');
 const { createChaosRepository, createFaultCache } = require('./chaos/repository');
 const { createDependencyCaller } = require('./v5/resilience');
 const { resilienceConfig } = require('./v5/config');
+const { createFlowArchive } = require('./v5/archivo');
 const { createMetrics } = require('./services/metrics');
 const { getRuntimeInfo, registerVersionHeaders } = require('./version');
 const { registerFaultInjection } = require('./fault-injection');
@@ -131,7 +132,8 @@ async function buildApp(options = {}) {
     log: app.log,
   });
   const caller = createDependencyCaller({ ...resilienceConfig(options.resilience), metrics });
-  await app.register(v5Routes, { caller, faults, metrics });
+  const archivo = options.flowArchive || createFlowArchive({ log: app.log });
+  await app.register(v5Routes, { caller, faults, metrics, archivo });
   await app.register(chaosRoutes, { repository: chaosRepository, cache: faults });
 
   return app;

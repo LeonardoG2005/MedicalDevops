@@ -1,0 +1,36 @@
+{
+  "id": "seguridad_identidad_coordinador_impersonada",
+  "titulo": "Identidad de maquina del coordinador usada por suplantacion o con llave estatica",
+  "capa": "identidad",
+  "propietario": "Leonardo",
+  "experimento": 1,
+  "fuente": "Cloud Audit Logs (data_access y activity): principalEmail del coordinador con serviceAccountDelegationInfo (impersonacion) o serviceAccountKeyName (llave exportada). Workload Identity desde GKE no produce ninguno de los dos.",
+  "attack": ["T1078.004 Valid Accounts: Cloud Accounts", "T1552.001 Unsecured Credentials: Credentials In Files"],
+  "d3fend": ["D3-UAP User Account Permissions", "D3-RAPA Resource Access Pattern Analysis", "D3-CR Credential Revoking"],
+  "severidad": "CRITICAL",
+  "umbral": "1 evento",
+  "terraform": "google_logging_metric.seguridad[\"identidad_coordinador_impersonada\"]",
+  "filtro": "protoPayload.authenticationInfo.principalEmail=\"medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com\" AND (protoPayload.authenticationInfo.serviceAccountDelegationInfo:* OR protoPayload.authenticationInfo.serviceAccountKeyName:*)",
+  "casos": {
+    "positivos": [
+      {
+        "nombre": "impersonacion desde una laptop (gcloud --impersonate-service-account)",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion", "authenticationInfo": { "principalEmail": "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com", "serviceAccountDelegationInfo": [ { "firstPartyPrincipal": { "principalEmail": "persona@gmail.com" } } ] }, "requestMetadata": { "callerIp": "190.1.2.3" } } }
+      },
+      {
+        "nombre": "llave JSON exportada usada fuera de GKE",
+        "entrada": { "protoPayload": { "methodName": "storage.objects.delete", "authenticationInfo": { "principalEmail": "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com", "serviceAccountKeyName": "//iam.googleapis.com/projects/project-40fc41d1-6899-4ce0-9ef/serviceAccounts/medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com/keys/abc123" } } }
+      }
+    ],
+    "negativos": [
+      {
+        "nombre": "la misma identidad desde Workload Identity en GKE (uso legitimo)",
+        "entrada": { "protoPayload": { "methodName": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion", "authenticationInfo": { "principalEmail": "medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com", "principalSubject": "serviceAccount:medical-api-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com" }, "requestMetadata": { "callerIp": "34.1.2.3" } } }
+      },
+      {
+        "nombre": "otra identidad impersonada (el orquestador)",
+        "entrada": { "protoPayload": { "authenticationInfo": { "principalEmail": "medical-orchestrator-gsa@project-40fc41d1-6899-4ce0-9ef.iam.gserviceaccount.com", "serviceAccountDelegationInfo": [ {} ] } } }
+      }
+    ]
+  }
+}

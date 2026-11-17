@@ -594,6 +594,47 @@ Cada compañero recibió una guía (fuera del repositorio) que detalla contrato,
 4. `terraform apply` (por el workflow `terraform-gcp.yaml` al fusionar en `main`) crea el tablero y la alerta; antes, importar el secreto ya existente (ver `terraform/README.md`).
 5. Importar `chaos/grafana/dashboard-caos.json` en Grafana Cloud.
 
+## Seguridad: game day de Ingenieria del Caos (defensa en profundidad)
+
+Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Caos de Seguridad: en lugar de medir la velocidad del sistema se mide la eficacia de sus controles (MTTD, MTTC, cobertura de deteccion, falsos positivos y, en los datos, RPO y RTO). Es un entregable independiente del de rendimiento. El detalle esta en `chaos/security/README.md` y el informe en `docs/chaos/INFORME_GAMEDAY.md`.
+
+### Reparto de experimentos
+
+| # | Experimento | Capa | Propietario | Donde |
+|---|---|---|---|---|
+| 1 | Identidad de maquina del coordinador (credencial usada desde un origen no previsto) | Identidad | Leonardo | este repo |
+| 2 | Exposicion y segmentacion (regla permisiva, salto este-oeste) | Red | Angel (AWS) | su repo (guia) |
+| 3 | Telemetria y capa de IA (exportador detenido, inyeccion de instrucciones) | Deteccion / IA | Juan (OCI) | su repo (guia) |
+| 4 | Resiliencia de los datos del flujo (borrado, RPO/RTO) | Datos | grupal, GCP | este repo |
+
+### Lo implementado en esta API
+
+- **Identidad (experimento 1).** El token del interruptor de caos pasa de un secreto estatico (ronda 0) a tokens efimeros firmados con audiencia y TTL de 15 minutos, con el secreto estatico rechazado en la red (`src/chaos/token.js`, `CHAOS_TOKEN_MODE`). Ventana de ejecucion opcional (`CHAOS_WINDOW`). Honeytoken (`medical-api-admin-backup-key`) que alerta al ser leido. Cada decision de acceso se registra para la deteccion.
+- **Datos (experimento 4).** Cada ejecucion del flujo se archiva como `flujo/<traceId>.json` en el bucket de resultados (`src/v5/archivo.js`). La ronda 1 añade copia aislada en otra region con IAM separado, retencion (WORM) y minimo privilegio del coordinador (solo crea objetos). Scripts en `chaos/security/exp4-datos/`.
+- **Deteccion como codigo.** Seis reglas en `chaos/security/detecciones/*.json` (filtro de Cloud Logging + casos positivos y negativos), publicadas por Terraform (`terraform/seguridad.tf`) como metricas y alertas de Cloud Monitoring. `chaos/security/detecciones/evaluar.js` comprueba que cada regla dispara con el ataque y calla con el trafico normal.
+- **IA en la defensa.** `chaos/security/ia/analizar.js` correlaciona los hallazgos con un modelo (OpenAI o Anthropic), con humano en el bucle; `chaos/security/ia/prueba-inyeccion.js` inyecta instrucciones en datos que la IA ingiere y verifica que las reporte en vez de ejecutarlas (OWASP LLM01 / ATLAS AML.T0051).
+- **Contencion con aprobacion humana.** `.github/workflows/security-remediate.yml` rota el token del interruptor tras la aprobacion de un revisor (environment `produccion-seguridad`).
+- **Alerta por ausencia de senal.** Latido de telemetria de la API; si deja de escribir bitacora, se alerta.
+
+### Resultados medidos (2026-11-16, GCP)
+
+| Experimento | Metrica | Ronda 0 | Ronda 1 |
+|---|---|---|---|
+| 1 identidad | credencial mal usada contenida | no | si (401) |
+| 1 identidad | MTTD | 4.6 s | 4.3 s |
+| 4 datos | RTO | 305 s (versiones) | 20 s (copia aislada) |
+| 4 datos | RPO | 0 | 0 |
+| 4 datos | borrado de la copia (WORM) | n/a | bloqueado (403) |
+| IA | inyecciones ejecutadas / reportadas | n/a | 0 / 3 |
+
+### Trazabilidad a marcos de referencia
+
+MITRE ATT&CK (tecnica emulada) y D3FEND (contramedida) en cada regla de `chaos/security/detecciones/`; MITRE ATLAS y OWASP LLM/Agentic 2026 en la capa de IA; ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207 (verificacion continua, minimo privilegio, microsegmentacion) en la tabla del informe (`docs/chaos/INFORME_GAMEDAY.md`, seccion 9).
+
+### Lo que falta de los compañeros
+
+Experimentos 2 (Angel, red en AWS) y 3 (Juan, telemetria e IA en OCI), con sus dos rondas, reglas de deteccion como codigo y mejoras. Guias detalladas fuera del repositorio. Lo unico que el coordinador necesita de ellos: sus APIs en linea y el `X-Trace-Id` en sus logs para correlacionar.
+
 ## Cómo correr en local
 
 ```bash
