@@ -1,14 +1,21 @@
 {
   "title": "Medical API v5: experimento de caos (latencia saliente hacia Angel)",
   "uid": "medical-caos-v5",
-  "tags": ["medical-api", "chaos", "v5"],
+  "tags": [
+    "medical-api",
+    "chaos",
+    "v5"
+  ],
   "timezone": "America/Bogota",
   "editable": true,
   "schemaVersion": 39,
   "version": 1,
   "refresh": "15s",
-  "time": { "from": "now-30m", "to": "now" },
-  "description": "Ronda 0 (sin protecciones) contra ronda 1 (timeout + circuit breaker + respuesta degradada). Datos: OpenTelemetry del coordinador en GKE (metricas http auto instrumentadas y las del experimento) y trazas en Tempo. La ventana de inyeccion se ve en el panel 'Fallo activo' y como anotacion.",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "description": "Ronda 0 (sin protecciones) contra ronda 1 (timeout + circuit breaker + respuesta degradada). Datos: OpenTelemetry del coordinador en GKE (metricas http auto instrumentadas y las del experimento) y trazas en Tempo. La ventana de inyeccion se ve en el panel 'Fallo activo' y como anotacion. Ventanas de 5 min porque OTLP exporta cada 60 s (rate() necesita al menos dos muestras).",
   "templating": {
     "list": [
       {
@@ -17,7 +24,8 @@
         "type": "datasource",
         "query": "prometheus",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/grafanacloud-.*-prom$/"
       },
       {
         "name": "ds_tempo",
@@ -25,24 +33,32 @@
         "type": "datasource",
         "query": "tempo",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/grafanacloud-.*-traces$/"
       },
       {
         "name": "job",
         "label": "Servicio (job)",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_prom}"
+        },
         "query": "label_values(flow_requests_total, job)",
         "refresh": 2,
         "includeAll": false,
-        "current": {},
+        "current": {
+          "text": "api-c-documentos",
+          "value": "api-c-documentos"
+        },
         "hide": 0
       },
       {
         "name": "ruta",
         "type": "constant",
-        "query": "/api/v5/flujo/:imagenId",
-        "hide": 2
+        "query": "/api/v5/flujo/.*",
+        "hide": 2,
+        "description": "Regex de las dos rutas del flujo (/random y /:imagenId)"
       }
     ]
   },
@@ -50,11 +66,14 @@
     "list": [
       {
         "name": "Fallo inyectado (interruptor de caos)",
-        "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_prom}"
+        },
         "enable": true,
         "iconColor": "red",
         "expr": "max by (peer, type) (chaos_fault_active{job=\"$job\"}) == 1",
-        "step": "15s",
+        "step": "60s",
         "titleFormat": "Fallo activo: {{peer}} ({{type}})",
         "useValueForTime": false
       }
@@ -66,20 +85,44 @@
       "type": "timeseries",
       "title": "Metrica objetivo: p95 del flujo por ronda (ms)",
       "description": "p95 de GET /api/v5/flujo/:imagenId. Ronda 0 y ronda 1 como lineas separadas. Linea roja: umbral de 2000 ms de chaos/slo.json.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, round) (rate(http_request_duration_seconds_bucket{job=\"$job\", route=\"$ruta\"}[2m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, round) (rate(http_request_duration_seconds_bucket{job=\"$job\", route=~\"$ruta\"}[5m]))) * 1000",
           "legendFormat": "ronda {{round}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 2000 } ] },
-          "custom": { "thresholdsStyle": { "mode": "line" } }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
         },
         "overrides": []
       }
@@ -89,56 +132,103 @@
       "type": "timeseries",
       "title": "Resultado del flujo por segundo (ok, degradado, error)",
       "description": "flow_requests_total por resultado y ronda. En la ronda 0 el fallo produce 'error' (502); en la ronda 1 produce 'degradado' (200 con campos en null).",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (outcome, round) (rate(flow_requests_total{job=\"$job\"}[1m]))",
+          "expr": "sum by (outcome, round) (rate(flow_requests_total{job=\"$job\"}[5m]))",
           "legendFormat": "{{outcome}} (ronda {{round}})"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "Latencia p95 de cada dependencia (ms)",
       "description": "dependency_request_duration_seconds por compañero. Con el fallo activo Angel sube a 3000 ms en la ronda 0 y queda cortado en 2000 ms (timeout) o en 0 ms (circuito abierto) en la ronda 1.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, peer, round) (rate(dependency_request_duration_seconds_bucket{job=\"$job\"}[2m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, peer, round) (rate(dependency_request_duration_seconds_bucket{job=\"$job\"}[5m]))) * 1000",
           "legendFormat": "{{peer}} (ronda {{round}})"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 4,
       "type": "timeseries",
       "title": "Resultado de las llamadas salientes por segundo",
       "description": "ok, timeout, error o circuito_abierto por compañero.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (peer, outcome) (rate(dependency_request_duration_seconds_count{job=\"$job\"}[1m]))",
+          "expr": "sum by (peer, outcome) (rate(dependency_request_duration_seconds_count{job=\"$job\"}[5m]))",
           "legendFormat": "{{peer}}: {{outcome}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 5,
       "type": "state-timeline",
       "title": "Fallo activo en el interruptor de caos (ventana de inyeccion)",
       "description": "1 mientras el fallo esta activo (POST /internal/chaos hasta DELETE o vencimiento del TTL).",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 18 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
       "targets": [
         {
           "refId": "A",
@@ -148,8 +238,22 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       }
@@ -159,8 +263,16 @@
       "type": "state-timeline",
       "title": "Estado del circuit breaker por compañero (0 cerrado, 1 abierto, 2 semiabierto)",
       "description": "Solo cambia en la ronda 1. El circuito abre tras 5 llamadas con mas del 50 % de fallos y prueba de nuevo a los 10 s.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 18 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
       "targets": [
         {
           "refId": "A",
@@ -170,8 +282,26 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 }, { "color": "orange", "value": 2 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 2
+              }
+            ]
+          }
         },
         "overrides": []
       }
@@ -181,20 +311,44 @@
       "type": "timeseries",
       "title": "Tasa de error del flujo (5xx) por ronda",
       "description": "Metrica de guarda del experimento (umbral 5 %).",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum by (round) (rate(http_requests_total{job=\"$job\", route=\"$ruta\", status_code=~\"5..\"}[1m])) or sum by (round) (rate(http_requests_total{job=\"$job\", route=\"$ruta\"}[1m])) * 0) / sum by (round) (rate(http_requests_total{job=\"$job\", route=\"$ruta\"}[1m]))",
+          "expr": "(sum by (round) (rate(http_requests_total{job=\"$job\", route=~\"$ruta\", status_code=~\"5..\"}[5m])) or sum by (round) (rate(http_requests_total{job=\"$job\", route=~\"$ruta\"}[5m])) * 0) / sum by (round) (rate(http_requests_total{job=\"$job\", route=~\"$ruta\"}[5m]))",
           "legendFormat": "ronda {{round}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.05 } ] },
-          "custom": { "thresholdsStyle": { "mode": "line" } }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
         },
         "overrides": []
       }
@@ -204,45 +358,79 @@
       "type": "timeseries",
       "title": "Peticiones al flujo por segundo y por pod",
       "description": "Reparto de la carga de k6 entre las dos replicas de GKE.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (instance) (rate(http_requests_total{job=\"$job\", route=\"$ruta\"}[1m]))",
+          "expr": "sum by (instance) (rate(http_requests_total{job=\"$job\", route=~\"$ruta\"}[5m]))",
           "legendFormat": "{{instance}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 9,
       "type": "timeseries",
       "title": "Latencia p95 del cliente HTTP por destino (auto instrumentada)",
       "description": "http_client_request_duration_seconds de la instrumentacion undici: la misma latencia saliente vista por OpenTelemetry, por host de destino.",
-      "datasource": { "type": "prometheus", "uid": "${ds_prom}" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prom}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{job=\"$job\"}[2m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{job=\"$job\"}[5m]))) * 1000",
           "legendFormat": "{{server_address}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 10,
       "type": "table",
       "title": "Trazas del flujo (Tempo): buscar por trace id de k6 o de la demo",
       "description": "Cada traza muestra el span del flujo y los spans hijos hacia Angel y Juan con el mismo trace id. Filtre por el atributo http.request.header.x_trace_id o por duracion > 2 s.",
-      "datasource": { "type": "tempo", "uid": "${ds_tempo}" },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 32 },
+      "datasource": {
+        "type": "tempo",
+        "uid": "${ds_tempo}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
       "targets": [
         {
           "refId": "A",
           "queryType": "traceql",
-          "query": "{ resource.service.name = \"api-c-documentos\" && span.http.route = \"/api/v5/flujo/:imagenId\" }",
+          "query": "{ resource.service.name = \"api-c-documentos\" && span.url.path =~ \"/api/v5/flujo.*\" }",
           "limit": 50,
           "tableType": "traces"
         }
