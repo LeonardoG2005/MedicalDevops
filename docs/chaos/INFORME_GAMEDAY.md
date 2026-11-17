@@ -182,6 +182,20 @@ y criptoagilidad postcuantica frente a CNSA 2.0, plazo 2027.)
 - Proximos experimentos: fallo correlacionado (nodo de GKE), rotacion de claves
   postcuantica en el borde, notificacion de incidente con los tiempos del CRA.
 
+## Hallazgos al pasar las reglas a produccion (2026-11-17)
+
+Dos falsos positivos que los casos de prueba sinteticos no mostraban y la telemetria real si:
+
+1. **La regla de impersonacion disparaba con el trafico legitimo.** Workload Identity tambien deja
+   `serviceAccountDelegationInfo` (sujeto `<proyecto>.svc.id.goog[default/medical-api]`). En 6 horas la
+   regla habria disparado 71 veces: 39 escrituras del archivo del flujo, 20 conexiones a Cloud SQL y 12
+   lecturas de secretos, todas legitimas. Se excluyo ese sujeto y los casos negativos se reemplazaron por
+   la forma real de esos logs; con la regla nueva, 0 de esas 71 entradas disparan. Leccion: un caso
+   negativo inventado no prueba nada; hay que sacarlo de la telemetria real (efecto de la tasa base).
+2. **La propia infraestructura como codigo tocaba el senuelo.** Terraform leia el valor del honeytoken
+   en cada plan y apply (lecturas de `github-actions-deployer` y del dueno con agente `Terraform/1.x`).
+   Cada corrida de CI habria disparado una alerta critica. El valor del senuelo salio de Terraform.
+
 ## Apoyo de IA en este informe
 
 Se uso Claude (Anthropic) para auditar el repositorio, diseñar los experimentos,

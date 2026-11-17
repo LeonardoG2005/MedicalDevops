@@ -332,3 +332,14 @@ segundo servicio Cloud Run.
   Terraform intentara reemplazar el bucket.
 - `plan` verificado el 2026-11-17 contra el estado remoto: 9 imports, 7 alertas nuevas, 8 cambios
   en sitio (descripciones y etiquetas), 0 destrucciones.
+- **Alertas en PromQL (corregido el 2026-11-17).** El apply del PR #71 fallo con
+  `400: must specify a restriction on "resource.type"`: una condicion `metric.type=...` sobre una
+  metrica de log debe nombrar el recurso monitoreado. Las seis alertas usan ahora
+  `condition_prometheus_query_language`, como `alertas.tf` y `chaos.tf`, con `monitored_resource`
+  explicito por metrica: `k8s_container` (interruptor y latido), `gcs_bucket` (borrados),
+  `audited_resource` (honeytoken) y `audited_resource`, `gcs_bucket` y `cloudsql_database` (identidad).
+  Tipos comprobados con datos reales; las consultas se ejecutaron contra la API antes del cambio.
+- **El valor del honeytoken salio de Terraform.** Refrescar una `secret_version` lee su contenido
+  (`AccessSecretVersion`), que es la senal del senuelo: cada plan o apply de CI lo tocaba. Un bloque
+  `removed` con `destroy = false` la saca del estado sin borrarla. Es posible que el siguiente apply la
+  lea una ultima vez al olvidarla.
