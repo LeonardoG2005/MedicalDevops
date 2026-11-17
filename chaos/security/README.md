@@ -61,6 +61,8 @@ Leonardo sobre los hallazgos del game day.
 
 - Auditoria de acceso a datos en Secret Manager (DATA_READ, DATA_WRITE) y
   Storage (DATA_WRITE). Sin ella no hay deteccion de identidad ni de datos.
+  La activa el dueno del proyecto (CI no tiene setIamPolicy por minimo
+  privilegio; ver terraform/README.md). Activa desde el 2026-11-16.
 - Metricas de log `seguridad_*` (deteccion como codigo).
 - Alertas `seguridad_*` y la de ausencia de latido.
 - Honeytoken `medical-api-admin-backup-key`.

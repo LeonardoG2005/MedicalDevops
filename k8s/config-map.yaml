@@ -35,7 +35,8 @@ data:
   # endpoint is scraped by Managed Prometheus (pod-monitoring.yaml).
   OTEL_SDK_DISABLED: "false"
   OTEL_SERVICE_NAME: "api-c-documentos"
-  OTEL_RESOURCE_ATTRIBUTES: "service.version=5.0.0,deployment.environment=gke,cloud.provider=gcp"
+  # OTEL_RESOURCE_ATTRIBUTES lives in deployment.yaml: it needs the pod name
+  # (downward API) so each replica gets its own service.instance.id
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_METRICS_EXPORTER: "otlp"

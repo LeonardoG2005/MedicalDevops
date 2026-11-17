@@ -42,6 +42,17 @@ spec:
           # Everything sensitive comes from the Secret synced from Secret
           # Manager (secret-provider-class.yaml + secret-sync.yaml)
           env:
+            # Each replica must export its own OTel series. Without an instance
+            # identity both pods write the same counter, its value alternates
+            # (30, 6, 30, 6...) and Grafana reads every drop as a reset, which
+            # inflates rate() and the error percentage. Grafana Cloud maps
+            # service.instance.id to the "instance" label.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.instance.id=$(POD_NAME),k8s.pod.name=$(POD_NAME),service.version=5.0.0,deployment.environment=gke,cloud.provider=gcp"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -64,7 +64,22 @@ locals {
 
 # Sin bitacoras de acceso a datos, leer un secreto o borrar un objeto no deja
 # rastro: la cobertura de telemetria de las capas de identidad y datos empieza aqui.
+#
+# Cambiar la configuracion de auditoria exige resourcemanager.projects.setIamPolicy
+# sobre todo el proyecto. La cuenta de CI (github-actions-deployer) no lo tiene a
+# proposito: con ese permiso podria darse a si misma el rol de owner (escalada
+# de privilegios). Por minimo privilegio la auditoria la activa el dueno del
+# proyecto una sola vez (hecho a mano el 2026-11-16, ver terraform/README.md) y
+# CI no la gestiona. Quien aplique Terraform con una cuenta de owner puede
+# pasar gestionar_auditoria=true para declararla como codigo.
+variable "gestionar_auditoria" {
+  description = "Gestionar con Terraform la auditoria de acceso a datos (requiere setIamPolicy sobre el proyecto)."
+  type        = bool
+  default     = false
+}
+
 resource "google_project_iam_audit_config" "secretmanager" {
+  count   = var.gestionar_auditoria ? 1 : 0
   project = var.project_id
   service = "secretmanager.googleapis.com"
   audit_log_config { log_type = "DATA_READ" }
@@ -72,9 +87,34 @@ resource "google_project_iam_audit_config" "secretmanager" {
 }
 
 resource "google_project_iam_audit_config" "storage" {
+  count   = var.gestionar_auditoria ? 1 : 0
   project = var.project_id
   service = "storage.googleapis.com"
   audit_log_config { log_type = "DATA_WRITE" }
+}
+
+# Recursos creados a mano durante el game day del 2026-11-16 (antes de que CI
+# los aplicara). Los bloques import hacen que Terraform los adopte en vez de
+# fallar con 409 "already exists".
+import {
+  to = google_secret_manager_secret.honeytoken
+  id = "projects/${var.project_id}/secrets/medical-api-admin-backup-key"
+}
+
+import {
+  to = google_secret_manager_secret_version.honeytoken
+  id = "projects/${var.project_id}/secrets/medical-api-admin-backup-key/versions/1"
+}
+
+import {
+  for_each = local.detecciones
+  to       = google_logging_metric.seguridad[each.key]
+  id       = "seguridad_${each.key}"
+}
+
+import {
+  to = google_storage_bucket.copia_aislada
+  id = local.bucket_copia
 }
 
 # Honeytoken: un secreto con nombre apetecible que ningun componente lee. El
@@ -101,18 +141,15 @@ resource "google_logging_metric" "seguridad" {
   description = each.value.descripcion
   filter      = each.value.filtro
 
+  # Contador simple, sin etiquetas: las metricas se crearon asi a mano el dia
+  # del game day y el proveedor trata agregar etiquetas como reemplazo (borraria
+  # su serie historica, que es evidencia). El detalle para el triage (motivo,
+  # agente, ip, principal) esta en la propia entrada de log; "etiquetas" queda
+  # documentado en locals para cuando se cree desde cero.
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "INT64"
-    dynamic "labels" {
-      for_each = each.value.etiquetas
-      content {
-        key        = labels.key
-        value_type = "STRING"
-      }
-    }
   }
-  label_extractors = each.value.etiquetas
 }
 
 resource "google_monitoring_alert_policy" "seguridad" {
@@ -195,9 +232,12 @@ resource "google_storage_bucket" "copia_aislada" {
     enabled = true
   }
 
+  # Bloqueada (WORM real): nadie, ni el dueno del proyecto, puede acortarla ni
+  # quitarla, y ningun objeto se borra o sobrescribe antes de 7 dias. Se bloqueo
+  # el 2026-11-16 durante el experimento 4 (el borrado devolvio 403).
   retention_policy {
     retention_period = 7 * 86400
-    is_locked        = false
+    is_locked        = true
   }
 
   labels = {

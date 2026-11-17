@@ -308,3 +308,27 @@ segundo servicio Cloud Run.
 - `google_monitoring_alert_policy.caos_fallo_olvidado`: alerta si
   `chaos_fault_active` lleva 15 minutos en 1 (mas que el TTL maximo del interruptor).
   `canal_notificacion_id` recibe el ID del canal de correo creado en Monitoring > Alerting.
+
+## Game day de seguridad (`seguridad.tf`) y lo que se aprendio al aplicarlo
+
+- **Auditoria de acceso a datos fuera de CI (minimo privilegio).** Activar `DATA_READ`/`DATA_WRITE`
+  exige `resourcemanager.projects.setIamPolicy` sobre el proyecto. La cuenta de CI
+  (`github-actions-deployer`) no tiene ese permiso a proposito: con el podria darse a si misma el
+  rol de owner. El primer `apply` fallo con `403 Policy update access denied` por eso. Ahora los dos
+  `google_project_iam_audit_config` dependen de `gestionar_auditoria` (por defecto `false`) y la
+  auditoria la activo el dueno del proyecto a mano el 2026-11-16 (Secret Manager lectura y
+  escritura, Storage escritura). Verificar con:
+  `gcloud projects get-iam-policy project-40fc41d1-6899-4ce0-9ef --format="yaml(auditConfigs)"`.
+- **Recursos creados a mano durante el game day.** El honeytoken (`medical-api-admin-backup-key` y su
+  version 1), las seis metricas `seguridad_*` y el bucket `...-results-copia-aislada` se crearon con
+  gcloud antes de que CI aplicara. Los bloques `import` de `seguridad.tf` los adoptan (Terraform >= 1.7).
+  Las metricas se declaran sin etiquetas, igual que existen: agregar etiquetas a una metrica de log
+  obliga a reemplazarla y eso borra su serie historica, que es evidencia del game day.
+- **Retenciones bloqueadas (WORM), irreversibles.** El bucket del flujo
+  (`medical-devops-400345348270-results`) tiene retencion de 1 dia **bloqueada** desde el apply del
+  2026-11-17 00:44 UTC, y la copia aislada tiene 7 dias **bloqueada** desde el experimento 4. Una
+  retencion bloqueada se puede alargar pero nunca acortar ni quitar, y ningun objeto se borra ni se
+  sobrescribe antes de cumplirla. Por eso `is_locked = true` en los dos: declarar `false` haria que
+  Terraform intentara reemplazar el bucket.
+- `plan` verificado el 2026-11-17 contra el estado remoto: 9 imports, 7 alertas nuevas, 8 cambios
+  en sitio (descripciones y etiquetas), 0 destrucciones.

@@ -129,7 +129,9 @@ Ronda 1 sobre la nube: PENDIENTE (tabla equivalente con los valores reales y enl
   que la recuperación real se ve solo cuando el fallo termina (sonda `el-sistema-volvio-al-estado-estable`).
 - El diario de Chaos Toolkit en Windows falla con cp1252 por los caracteres de k6; se necesita
   `PYTHONUTF8=1`. En el runner de CI (Linux) no ocurre.
-- El 2026-11-16 las dos APIs de los compañeros estaban fuera de línea; con ellas caídas el flujo en ronda 0
+- El 2026-11-16, en la tarde, la API de Angel volvió a responder en su nuevo ALB y el coordinador la ve en
+  `estado = "ok"` con el trace id propagado; la de Juan sigue en 404. Antes de eso las dos estaban fuera de
+  línea; con ellas caídas el flujo en ronda 0
   responde 502 por `fetch failed` (error, no timeout), lo que enmascararía el experimento de latencia.
 
 ## 8. Backlog de resiliencia
