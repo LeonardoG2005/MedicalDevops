@@ -15,7 +15,8 @@ const PEERS = {
     envVar: 'API_A_URL',
     path: '/api/v2/entidades/vuelos/random',
     entidad: 'vuelo',
-    nube: 'oci',
+    // Desplegada en Railway desde el 2026-11-17 (antes OCI, ya eliminado)
+    nube: 'railway',
     propietario: 'Juan',
   },
 };
