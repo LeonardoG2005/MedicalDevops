@@ -147,7 +147,11 @@ Ronda 1 sobre la nube: PENDIENTE (tabla equivalente con los valores reales y enl
 ## 9. Evidencia de observabilidad
 
 - Tablero Cloud Monitoring (Terraform `terraform/chaos.tf`): PENDIENTE (enlace tras `terraform apply`).
-- Tablero Grafana Cloud (`chaos/grafana/dashboard-caos.json`): PENDIENTE (enlace tras importar).
+- Tablero Grafana Cloud (`chaos/grafana/dashboard-caos.json`), importado el 2026-11-17:
+  https://browngecko19.grafana.net/d/medical-caos-v5. Capturas de las dos rondas sobre la nube: PENDIENTE.
+- Traza distribuida real (Tempo, 2026-11-17): una sola traza contiene el span del flujo en GKE, la escritura
+  del archivo en GCS, las consultas a Cloud SQL, la llamada a la API de Angel con sus propios spans de servidor
+  (`api-b-adopcion`) y la llamada a la API de Juan en Railway. Las tres APIs responden 200 de punta a punta.
 - Trazas: `trace_id` y `span_id` ya aparecen en los logs del pod en GKE junto con `traceId`
   (verificado el 2026-11-16 con `X-Trace-Id: humo-gke-0002`). Capturas de Tempo: PENDIENTE.
 - Archivos de las dos rondas locales: `chaos/results/` (versionados: k6-ronda-N.json, journal-ronda-N.json, gate-ronda-N.json).
