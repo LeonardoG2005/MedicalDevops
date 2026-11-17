@@ -33,8 +33,12 @@ locals {
     }
     identidad_coordinador_impersonada = {
       descripcion = "La identidad del coordinador (medical-api-gsa) usada por suplantacion o con una llave estatica, no desde Workload Identity"
-      filtro      = "protoPayload.authenticationInfo.principalEmail=\"${local.api_gsa_email}\" AND (protoPayload.authenticationInfo.serviceAccountDelegationInfo:* OR protoPayload.authenticationInfo.serviceAccountKeyName:*)"
-      etiquetas   = { metodo = "EXTRACT(protoPayload.methodName)", ip = "EXTRACT(protoPayload.requestMetadata.callerIp)" }
+      # Workload Identity tambien deja serviceAccountDelegationInfo (sujeto
+      # <proyecto>.svc.id.goog[default/medical-api]); ese es el uso legitimo y
+      # se excluye. Sin esta exclusion la regla disparaba con cada escritura en
+      # GCS, cada conexion a Cloud SQL y cada lectura de secretos de los pods.
+      filtro    = "protoPayload.authenticationInfo.principalEmail=\"${local.api_gsa_email}\" AND NOT protoPayload.authenticationInfo.serviceAccountDelegationInfo.principalSubject=\"${local.sujeto_wi}\" AND (protoPayload.authenticationInfo.serviceAccountDelegationInfo:* OR protoPayload.authenticationInfo.serviceAccountKeyName:*)"
+      etiquetas = { metodo = "EXTRACT(protoPayload.methodName)", ip = "EXTRACT(protoPayload.requestMetadata.callerIp)" }
     }
     honeytoken_tocado = {
       descripcion = "Alguien leyo el secreto senuelo medical-api-admin-backup-key, que ningun componente legitimo usa"
@@ -53,13 +57,18 @@ locals {
     }
   }
 
+  # Cada metrica de log escribe sus series sobre el recurso monitoreado de la
+  # entrada que la origino; la condicion PromQL debe nombrarlo
+  # (monitored_resource). Tipos comprobados con datos reales el 2026-11-17.
   alertas = {
-    chaos_acceso_rechazado            = { umbral = 5, duracion = "0s", severidad = "WARNING", texto = "Mas de 5 rechazos del interruptor de caos en 5 minutos: alguien prueba credenciales o las usa fuera de la ventana. Revisar jsonPayload.motivo y jsonPayload.ip." }
-    chaos_acceso_origen_no_previsto   = { umbral = 0, duracion = "0s", severidad = "CRITICAL", texto = "El interruptor de caos acepto una llamada desde un agente no previsto: posible token filtrado. Contencion: workflow security-remediate.yml (rota el token con aprobacion humana)." }
-    identidad_coordinador_impersonada = { umbral = 0, duracion = "0s", severidad = "CRITICAL", texto = "La identidad del coordinador se uso por suplantacion o con llave estatica. Contencion: revisar quien tiene iam.serviceAccountTokenCreator y revocarlo; verificar que no existan llaves." }
-    honeytoken_tocado                 = { umbral = 0, duracion = "0s", severidad = "CRITICAL", texto = "Honeytoken tocado: el secreto senuelo no lo usa nadie legitimo. Tratar como intrusion confirmada y seguir el playbook del game day." }
-    objetos_flujo_borrados            = { umbral = 0, duracion = "0s", severidad = "CRITICAL", texto = "Objetos del flujo borrados o sobrescritos. Restaurar desde versiones o desde la copia aislada (chaos/security/exp4-datos)." }
+    chaos_acceso_rechazado            = { recursos = ["k8s_container"], umbral = 5, severidad = "WARNING", texto = "Mas de 5 rechazos del interruptor de caos en 5 minutos: alguien prueba credenciales o las usa fuera de la ventana. Revisar jsonPayload.motivo y jsonPayload.ip." }
+    chaos_acceso_origen_no_previsto   = { recursos = ["k8s_container"], umbral = 0, severidad = "CRITICAL", texto = "El interruptor de caos acepto una llamada desde un agente no previsto: posible token filtrado. Contencion: workflow security-remediate.yml (rota el token con aprobacion humana)." }
+    identidad_coordinador_impersonada = { recursos = ["audited_resource", "gcs_bucket", "cloudsql_database"], umbral = 0, severidad = "CRITICAL", texto = "La identidad del coordinador se uso por suplantacion o con llave estatica. Contencion: revisar quien tiene iam.serviceAccountTokenCreator y revocarlo; verificar que no existan llaves." }
+    honeytoken_tocado                 = { recursos = ["audited_resource"], umbral = 0, severidad = "CRITICAL", texto = "Honeytoken tocado: el secreto senuelo no lo usa nadie legitimo. Tratar como intrusion confirmada y seguir el playbook del game day." }
+    objetos_flujo_borrados            = { recursos = ["gcs_bucket"], umbral = 0, severidad = "CRITICAL", texto = "Objetos del flujo borrados o sobrescritos. Restaurar desde versiones o desde la copia aislada (chaos/security/exp4-datos)." }
   }
+
+  sujeto_wi = "serviceAccount:${var.project_id}.svc.id.goog[${var.gke_namespace}/medical-api]"
 }
 
 # Sin bitacoras de acceso a datos, leer un secreto o borrar un objeto no deja
@@ -102,11 +111,6 @@ import {
 }
 
 import {
-  to = google_secret_manager_secret_version.honeytoken
-  id = "projects/${var.project_id}/secrets/medical-api-admin-backup-key/versions/1"
-}
-
-import {
   for_each = local.detecciones
   to       = google_logging_metric.seguridad[each.key]
   id       = "seguridad_${each.key}"
@@ -129,9 +133,18 @@ resource "google_secret_manager_secret" "honeytoken" {
   depends_on = [google_project_service.required]
 }
 
-resource "google_secret_manager_secret_version" "honeytoken" {
-  secret      = google_secret_manager_secret.honeytoken.id
-  secret_data = "decoy-${data.google_project.current.number}-this-key-is-a-honeytoken-do-not-use"
+# El VALOR del senuelo no lo gestiona Terraform. Cada plan o apply refresca una
+# secret_version leyendo su contenido (AccessSecretVersion), que es justo la
+# senal del honeytoken: el CI disparaba la alerta en cada corrida (visto en la
+# auditoria del 2026-11-17, lecturas de github-actions-deployer con agente
+# Terraform). La version 1 se creo a mano y queda en GCP; este bloque solo la
+# saca del estado sin borrarla. El secreto (metadatos) si sigue en Terraform:
+# leer metadatos es GetSecret, no AccessSecretVersion.
+removed {
+  from = google_secret_manager_secret_version.honeytoken
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "google_logging_metric" "seguridad" {
@@ -158,18 +171,18 @@ resource "google_monitoring_alert_policy" "seguridad" {
   combiner     = "OR"
   severity     = each.value.severidad
 
+  # PromQL, igual que alertas.tf y chaos.tf. Un filtro "metric.type=..." sin
+  # restringir resource.type lo rechaza la API (error 400 del apply del
+  # 2026-11-17); aqui cada selector nombra su monitored_resource.
   conditions {
     display_name = "seguridad_${each.key} en 5 minutos"
-    condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.seguridad[each.key].name}\""
-      comparison      = "COMPARISON_GT"
-      threshold_value = each.value.umbral
-      duration        = each.value.duracion
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_SUM"
-      }
-      trigger { count = 1 }
+    condition_prometheus_query_language {
+      query = format("sum(%s) > %d", join(" or ", [
+        for r in each.value.recursos :
+        "increase(logging_googleapis_com:user_${google_logging_metric.seguridad[each.key].name}{monitored_resource=\"${r}\"}[5m])"
+      ]), each.value.umbral)
+      duration            = "0s"
+      evaluation_interval = "60s"
     }
   }
 
@@ -190,13 +203,10 @@ resource "google_monitoring_alert_policy" "latido_telemetria" {
 
   conditions {
     display_name = "sin bitacora de la API durante ${var.ventana_latido_segundos} s"
-    condition_absent {
-      filter   = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.seguridad["latido_api"].name}\""
-      duration = "${var.ventana_latido_segundos}s"
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_SUM"
-      }
+    condition_prometheus_query_language {
+      query               = "absent_over_time(logging_googleapis_com:user_${google_logging_metric.seguridad["latido_api"].name}{monitored_resource=\"k8s_container\"}[${var.ventana_latido_segundos}s])"
+      duration            = "0s"
+      evaluation_interval = "60s"
     }
   }
 

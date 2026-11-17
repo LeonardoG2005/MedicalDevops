@@ -128,7 +128,9 @@ node chaos/security/detecciones/evaluar.js    # cada regla: dispara con el ataqu
 ```
 
 Los filtros coinciden con los publicados por Terraform en `terraform/seguridad.tf`
-(lo verifica `test/seguridad.detecciones.test.js`).
+(lo verifica `test/seguridad.detecciones.test.js`). Los casos negativos deben salir de logs reales:
+la primera version de la regla de impersonacion asumia que Workload Identity no deja
+`serviceAccountDelegationInfo`, y en produccion habria disparado con todo el trafico legitimo.
 
 ## IA en la defensa
 

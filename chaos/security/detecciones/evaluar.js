@@ -12,8 +12,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-function getPath(obj, dotted) {
-  return dotted.split('.').reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), obj);
+// Cloud Logging resolves a path through arrays element by element: a filter on
+// serviceAccountDelegationInfo.principalSubject matches if ANY element matches.
+// So this returns every value reachable by the path, flattening arrays.
+function getValues(obj, dotted) {
+  let current = [obj];
+  for (const key of dotted.split('.')) {
+    const next = [];
+    for (const item of current) {
+      const items = Array.isArray(item) ? item : [item];
+      for (const value of items) {
+        if (value && typeof value === 'object' && value[key] !== undefined) next.push(value[key]);
+      }
+    }
+    current = next;
+  }
+  return current.flatMap((v) => (Array.isArray(v) ? v : [v])).filter((v) => v !== undefined && v !== null);
 }
 
 function tokenize(filter) {
@@ -39,14 +53,15 @@ function parseComparison(token) {
   const [, field, op, raw] = m;
   const value = raw === undefined ? undefined : raw.replace(/\\"/g, '"');
   return (entry) => {
-    const actual = getPath(entry, field);
-    if (op === ':*') return actual !== undefined && actual !== null;
-    if (actual === undefined || actual === null) return false;
-    const text = String(actual);
-    if (op === '=') return text === value;
-    if (op === ':') return text.includes(value);
-    if (op === '=~') return new RegExp(value).test(text);
-    return false;
+    const values = getValues(entry, field);
+    if (op === ':*') return values.length > 0;
+    return values.some((actual) => {
+      const text = typeof actual === 'object' ? JSON.stringify(actual) : String(actual);
+      if (op === '=') return text === value;
+      if (op === ':') return text.includes(value);
+      if (op === '=~') return new RegExp(value).test(text);
+      return false;
+    });
   };
 }
 
