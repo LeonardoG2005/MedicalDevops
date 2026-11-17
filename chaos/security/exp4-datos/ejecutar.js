@@ -139,6 +139,83 @@ const comandos = {
     C.salida(restaurados > 0, { desde, rto_s: rto, objetos_restaurados: restaurados });
   },
 
+  // Restauracion parcial (version completa de la rubrica para 3 personas): se
+  // eligen N objetos de la copia aislada, se restauran a un prefijo aparte del
+  // bucket del flujo (no se sobrescribe nada: el bucket esta bajo WORM), se
+  // compara el md5 de cada uno con el de la copia y se mide el RTO parcial.
+  // Tambien se intenta borrar un objeto del bucket del flujo para registrar
+  // si la retencion bloqueada lo impide.
+  async 'restaurar-parcial'(args) {
+    const n = Number(args.n || 3);
+    const previo = C.leerResultado(archivo()) || {};
+    const bitacora = previo.bitacora || [];
+    C.comprobarParada(bitacora);
+    // Si un borrado previo dejo los objetos de la copia como versiones no
+    // actuales (la retencion impide destruirlos, no ocultarlos), se restaura la
+    // ultima version de cada uno
+    let enCopia = listar(COPIA);
+    let desdeVersiones = false;
+    if (!enCopia.length) {
+      const salidaLs = C.gcloud(['storage', 'ls', '-a', '-r', `gs://${COPIA}/${PREFIJO}`], { json: false, allowFail: true });
+      const ultimas = new Map();
+      for (const linea of (typeof salidaLs === 'string' ? salidaLs.split('\n') : [])) {
+        const m = linea.trim().match(/^(gs:\/\/.+\.json)#(\d+)$/);
+        if (m && (!ultimas.has(m[1]) || Number(m[2]) > ultimas.get(m[1]).gen)) ultimas.set(m[1], { gen: Number(m[2]), uri: `${m[1]}#${m[2]}` });
+      }
+      enCopia = [...ultimas.values()].map((v) => v.uri);
+      desdeVersiones = enCopia.length > 0;
+    }
+    enCopia = enCopia.slice(0, n);
+    if (!enCopia.length) C.salida(false, { error: 'La copia aislada no tiene objetos flujo/*.json ni versiones' });
+    const prefijo = `restauracion-parcial/${Date.now().toString(36)}/`;
+    const md5 = (uri) => {
+      const d = C.gcloud(['storage', 'objects', 'describe', uri], { allowFail: true });
+      return d && !d.error ? (d.md5_hash || d.md5Hash || null) : null;
+    };
+    const inicio = C.ahora();
+    bitacora.push({ t: inicio, evento: 'restauracion_parcial_inicio', objetos: enCopia.length });
+    const objetos = [];
+    for (const origen of enCopia) {
+      // El origen puede venir con #generacion (version no actual); el destino no
+      const nombre = origen.split('/').pop().replace(/#\d+$/, '');
+      const destino = `gs://${BUCKET}/${prefijo}${nombre}`;
+      const r = C.gcloud(['storage', 'cp', origen, destino], { json: false, allowFail: true });
+      objetos.push({ origen, destino, copiado: typeof r === 'string', md5_origen: md5(origen), md5_destino: md5(destino) });
+    }
+    const fin = C.ahora();
+    const integros = objetos.filter((o) => o.copiado && o.md5_origen && o.md5_origen === o.md5_destino).length;
+    bitacora.push({ t: fin, evento: 'restauracion_parcial_fin', integros });
+
+    // WORM del bucket del flujo. Con versioning, borrar la version viva solo la
+    // oculta (queda como version no actual); la retencion bloqueada impide
+    // destruir la version. Se prueban las dos cosas y se verifica que el dato
+    // siga existiendo.
+    const versiones = (uri) => {
+      const s = C.gcloud(['storage', 'ls', '-a', uri], { json: false, allowFail: true });
+      return typeof s === 'string' ? s.split('\n').map((l) => l.trim()).filter((l) => /#\d+$/.test(l)) : [];
+    };
+    const victima = objetos[0]?.destino;
+    let wormPrimario = null;
+    if (victima) {
+      const ocultar = C.gcloud(['storage', 'rm', victima], { json: false, allowFail: true });
+      const tras = versiones(victima);
+      const destruir = tras.length ? C.gcloud(['storage', 'rm', tras[tras.length - 1]], { json: false, allowFail: true }) : null;
+      const final = versiones(victima);
+      wormPrimario = {
+        objeto: victima,
+        version_viva_ocultada: typeof ocultar === 'string',
+        destruccion_de_la_version_bloqueada: final.length > 0,
+        dato_retenido: final.length > 0,
+        respuesta_destruccion: destruir && typeof destruir === 'object' ? destruir.error : (destruir ? 'aceptada' : null),
+      };
+    }
+    bitacora.push({ t: C.ahora(), evento: 'intento_borrado_primario', dato_retenido: wormPrimario?.dato_retenido ?? null });
+
+    const resultado = { inicio, fin, rto_parcial_s: C.segundos(inicio, fin), pedidos: enCopia.length, integros, desde_versiones_no_actuales: desdeVersiones, objetos };
+    C.guardarResultado(archivo(), { ...previo, bitacora, restauracion_parcial: resultado, worm_primario: wormPrimario });
+    C.salida(integros === enCopia.length, { rto_parcial_s: resultado.rto_parcial_s, pedidos: enCopia.length, integros, worm_primario: wormPrimario });
+  },
+
   async informe() {
     const r0 = C.leerResultado('exp4-ronda-0.json');
     const r1 = C.leerResultado('exp4-ronda-1.json');
