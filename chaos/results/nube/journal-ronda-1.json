@@ -1,0 +1,610 @@
+{
+  "chaoslib-version": "1.45.1",
+  "platform": "Linux-7.0.0-1016-aws-x86_64-with-glibc2.43",
+  "node": "ip-10-0-133-162",
+  "experiment": {
+    "version": "1.0.0",
+    "title": "Latencia inyectada en la llamada saliente del coordinador (GKE) hacia la API de Angel (AWS)",
+    "description": "Hipotesis falsable: dado el perfil de carga P (10 usuarios virtuales en bucle cerrado durante 5 minutos, chaos/k6/flujo.js), cuando se inyecten 3000 ms de latencia en la llamada saliente hacia la API de Angel durante la duracion de la carga, el flujo GET /api/v5/flujo mantendra la latencia p95 extremo a extremo por debajo de 2000 ms y la tasa de error por debajo del 5 %. Ronda 0 (RESILIENCE_ENABLED=false): se espera que la hipotesis se refute, porque la latencia se suma entera al flujo. Ronda 1 (timeout de 2 s por dependencia + circuit breaker + respuesta degradada): se espera que se mantenga. Radio de impacto: solo la dependencia 'angel' del flujo v5 en los pods del coordinador; el resto de rutas, la base de datos y las APIs de los compañeros no se tocan. Duracion: la carga (5 min) mas el TTL maximo del fallo (7 min), que es la reversion automatica si la ejecucion muere. Condiciones de aborto: k6 detiene la carga si mas del 50 % de las peticiones fallan durante 60 s; Chaos Toolkit ejecuta los rollbacks siempre (--rollback-strategy=always). Metrica objetivo: p95 de http_req_duration medido por k6; ventana de observacion: los 5 minutos de la carga.",
+    "tags": [
+      "medical-api",
+      "latencia",
+      "dependencia-externa",
+      "gke",
+      "aws",
+      "ronda-${ronda}"
+    ],
+    "contributions": {
+      "availability": "high",
+      "performance": "high",
+      "security": "none"
+    },
+    "configuration": {
+      "base_url": {
+        "type": "env",
+        "key": "CHAOS_BASE_URL",
+        "default": "http://34.123.58.136"
+      },
+      "imagen_id": {
+        "type": "env",
+        "key": "IMAGEN_ID",
+        "default": "random"
+      },
+      "ronda": {
+        "type": "env",
+        "key": "RONDA",
+        "default": "0"
+      },
+      "latencia_ms": {
+        "type": "env",
+        "key": "LATENCIA_MS",
+        "default": "3000"
+      },
+      "ttl_seconds": {
+        "type": "env",
+        "key": "TTL_SECONDS",
+        "default": "420"
+      },
+      "p95_ms": {
+        "type": "env",
+        "key": "P95_MS",
+        "default": "2000"
+      },
+      "perfil": {
+        "type": "env",
+        "key": "PERFIL",
+        "default": "completo"
+      },
+      "results_dir": {
+        "type": "env",
+        "key": "RESULTS_DIR",
+        "default": "chaos/results"
+      }
+    },
+    "secrets": {
+      "caos": {
+        "token": {
+          "type": "env",
+          "key": "CHAOS_TOKEN"
+        }
+      }
+    },
+    "steady-state-hypothesis": {
+      "title": "El flujo responde 200 en menos de ${p95_ms} ms y no hay fallos activos en el interruptor",
+      "probes": [
+        {
+          "type": "probe",
+          "name": "la-api-esta-sana",
+          "tolerance": 0,
+          "provider": {
+            "type": "process",
+            "path": "node",
+            "arguments": [
+              "chaos/probes.js",
+              "salud"
+            ],
+            "timeout": 30
+          }
+        },
+        {
+          "type": "probe",
+          "name": "el-flujo-completo-responde-a-tiempo",
+          "tolerance": 0,
+          "provider": {
+            "type": "process",
+            "path": "node",
+            "arguments": [
+              "chaos/probes.js",
+              "flujo",
+              "--max-ms",
+              "${p95_ms}",
+              "--imagen",
+              "${imagen_id}"
+            ],
+            "timeout": 45
+          }
+        }
+      ]
+    },
+    "method": [
+      {
+        "type": "probe",
+        "name": "antes-no-hay-fallos-activos",
+        "tolerance": 0,
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "sin-fallos"
+          ],
+          "timeout": 30
+        }
+      },
+      {
+        "type": "action",
+        "name": "inyectar-latencia-hacia-angel",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "activar",
+            "--peer",
+            "angel",
+            "--latencia",
+            "${latencia_ms}",
+            "--ttl",
+            "${ttl_seconds}",
+            "--motivo",
+            "experimento latencia ronda ${ronda}"
+          ],
+          "timeout": 30
+        },
+        "pauses": {
+          "after": 5
+        }
+      },
+      {
+        "type": "probe",
+        "name": "una-peticion-durante-el-fallo",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "flujo",
+            "--max-ms",
+            "60000",
+            "--imagen",
+            "${imagen_id}"
+          ],
+          "timeout": 70
+        }
+      },
+      {
+        "type": "action",
+        "name": "carga-k6-con-el-perfil-declarado",
+        "provider": {
+          "type": "process",
+          "path": "k6",
+          "arguments": [
+            "run",
+            "--env",
+            "BASE_URL=${base_url}",
+            "--env",
+            "IMAGEN_ID=${imagen_id}",
+            "--env",
+            "RONDA=${ronda}",
+            "--env",
+            "PERFIL=${perfil}",
+            "--env",
+            "P95_MS=${p95_ms}",
+            "--env",
+            "RESULTS_DIR=${results_dir}",
+            "chaos/k6/flujo.js"
+          ],
+          "timeout": 600
+        }
+      }
+    ],
+    "rollbacks": [
+      {
+        "type": "action",
+        "name": "revertir-la-latencia",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "revertir",
+            "--peer",
+            "angel"
+          ],
+          "timeout": 30
+        }
+      },
+      {
+        "type": "probe",
+        "name": "despues-no-quedan-fallos-activos",
+        "tolerance": 0,
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "sin-fallos"
+          ],
+          "timeout": 30
+        }
+      },
+      {
+        "type": "probe",
+        "name": "el-sistema-volvio-al-estado-estable",
+        "tolerance": 0,
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "flujo",
+            "--max-ms",
+            "${p95_ms}",
+            "--imagen",
+            "${imagen_id}"
+          ],
+          "timeout": 45
+        }
+      }
+    ],
+    "dry": null
+  },
+  "start": "2026-11-18T05:26:28.924909+00:00",
+  "status": "completed",
+  "deviated": false,
+  "steady_states": {
+    "before": {
+      "steady_state_met": true,
+      "probes": [
+        {
+          "activity": {
+            "type": "probe",
+            "name": "la-api-esta-sana",
+            "tolerance": 0,
+            "provider": {
+              "type": "process",
+              "path": "node",
+              "arguments": [
+                "chaos/probes.js",
+                "salud"
+              ],
+              "timeout": 30
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"ms\": 103,\n  \"cuerpo\": {\n    \"status\": \"ok\",\n    \"version\": \"5.0.0\",\n    \"track\": \"stable\"\n  }\n}\n",
+            "stderr": ""
+          },
+          "start": "2026-11-18T05:26:28.925269+00:00",
+          "status": "succeeded",
+          "end": "2026-11-18T05:26:29.055021+00:00",
+          "duration": 0.129752,
+          "tolerance_met": true
+        },
+        {
+          "activity": {
+            "type": "probe",
+            "name": "el-flujo-completo-responde-a-tiempo",
+            "tolerance": 0,
+            "provider": {
+              "type": "process",
+              "path": "node",
+              "arguments": [
+                "chaos/probes.js",
+                "flujo",
+                "--max-ms",
+                "${p95_ms}",
+                "--imagen",
+                "${imagen_id}"
+              ],
+              "timeout": 45
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"ms\": 247,\n  \"max_ms\": 2000,\n  \"traceId\": \"2d837d66-3a8b-48a4-bce2-244f1e9bcb0e\",\n  \"ronda\": \"1\",\n  \"degradado\": false,\n  \"dependencias\": {\n    \"angel\": {\n      \"estado\": \"ok\",\n      \"duracion_ms\": 73,\n      \"nube\": \"aws\",\n      \"entidad\": \"animal\",\n      \"detalle\": null\n    },\n    \"juan\": {\n      \"estado\": \"ok\",\n      \"duracion_ms\": 78,\n      \"nube\": \"railway\",\n      \"entidad\": \"vuelo\",\n      \"detalle\": null\n    }\n  }\n}\n",
+            "stderr": ""
+          },
+          "start": "2026-11-18T05:26:29.055160+00:00",
+          "status": "succeeded",
+          "end": "2026-11-18T05:26:29.326312+00:00",
+          "duration": 0.271152,
+          "tolerance_met": true
+        }
+      ]
+    },
+    "after": {
+      "steady_state_met": true,
+      "probes": [
+        {
+          "activity": {
+            "type": "probe",
+            "name": "la-api-esta-sana",
+            "tolerance": 0,
+            "provider": {
+              "type": "process",
+              "path": "node",
+              "arguments": [
+                "chaos/probes.js",
+                "salud"
+              ],
+              "timeout": 30
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"ms\": 91,\n  \"cuerpo\": {\n    \"status\": \"ok\",\n    \"version\": \"5.0.0\",\n    \"track\": \"stable\"\n  }\n}\n",
+            "stderr": ""
+          },
+          "start": "2026-11-18T05:31:36.971818+00:00",
+          "status": "succeeded",
+          "end": "2026-11-18T05:31:37.083809+00:00",
+          "duration": 0.111991,
+          "tolerance_met": true
+        },
+        {
+          "activity": {
+            "type": "probe",
+            "name": "el-flujo-completo-responde-a-tiempo",
+            "tolerance": 0,
+            "provider": {
+              "type": "process",
+              "path": "node",
+              "arguments": [
+                "chaos/probes.js",
+                "flujo",
+                "--max-ms",
+                "${p95_ms}",
+                "--imagen",
+                "${imagen_id}"
+              ],
+              "timeout": 45
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"ms\": 131,\n  \"max_ms\": 2000,\n  \"traceId\": \"4fe81547-615b-4c26-b237-3837ac243f67\",\n  \"ronda\": \"1\",\n  \"degradado\": true,\n  \"dependencias\": {\n    \"angel\": {\n      \"estado\": \"circuito_abierto\",\n      \"duracion_ms\": 0,\n      \"nube\": \"aws\",\n      \"entidad\": \"animal\",\n      \"detalle\": \"Breaker is open\"\n    },\n    \"juan\": {\n      \"estado\": \"ok\",\n      \"duracion_ms\": 38,\n      \"nube\": \"railway\",\n      \"entidad\": \"vuelo\",\n      \"detalle\": null\n    }\n  }\n}\n",
+            "stderr": ""
+          },
+          "start": "2026-11-18T05:31:37.083930+00:00",
+          "status": "succeeded",
+          "end": "2026-11-18T05:31:37.235979+00:00",
+          "duration": 0.152049,
+          "tolerance_met": true
+        }
+      ]
+    },
+    "during": []
+  },
+  "run": [
+    {
+      "activity": {
+        "type": "probe",
+        "name": "antes-no-hay-fallos-activos",
+        "tolerance": 0,
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "sin-fallos"
+          ],
+          "timeout": 30
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"activos\": []\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:26:29.326557+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:26:29.445343+00:00",
+      "duration": 0.118786
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "inyectar-latencia-hacia-angel",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "activar",
+            "--peer",
+            "angel",
+            "--latencia",
+            "${latencia_ms}",
+            "--ttl",
+            "${ttl_seconds}",
+            "--motivo",
+            "experimento latencia ronda ${ronda}"
+          ],
+          "timeout": 30
+        },
+        "pauses": {
+          "after": 5
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\n  \"ok\": true,\n  \"status\": 201,\n  \"fallo\": {\n    \"peer\": \"angel\",\n    \"latency_ms\": 3000,\n    \"error_rate\": 0,\n    \"expires_at\": \"2026-11-18T05:33:29.545Z\",\n    \"created_at\": \"2026-11-18T05:26:29.545Z\",\n    \"creado_por\": \"node\",\n    \"motivo\": \"experimento latencia ronda 1\"\n  }\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:26:29.445485+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:26:29.574056+00:00",
+      "duration": 0.128571
+    },
+    {
+      "activity": {
+        "type": "probe",
+        "name": "una-peticion-durante-el-fallo",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "flujo",
+            "--max-ms",
+            "60000",
+            "--imagen",
+            "${imagen_id}"
+          ],
+          "timeout": 70
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"ms\": 2235,\n  \"max_ms\": 60000,\n  \"traceId\": \"bcfd784a-82b2-484f-aea6-a736150b912f\",\n  \"ronda\": \"1\",\n  \"degradado\": true,\n  \"dependencias\": {\n    \"angel\": {\n      \"estado\": \"timeout\",\n      \"duracion_ms\": 2002,\n      \"nube\": \"aws\",\n      \"entidad\": \"animal\",\n      \"detalle\": \"The operation was aborted\"\n    },\n    \"juan\": {\n      \"estado\": \"ok\",\n      \"duracion_ms\": 136,\n      \"nube\": \"railway\",\n      \"entidad\": \"vuelo\",\n      \"detalle\": null\n    }\n  }\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:26:34.574501+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:26:36.835023+00:00",
+      "duration": 2.260522
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "carga-k6-con-el-perfil-declarado",
+        "provider": {
+          "type": "process",
+          "path": "k6",
+          "arguments": [
+            "run",
+            "--env",
+            "BASE_URL=${base_url}",
+            "--env",
+            "IMAGEN_ID=${imagen_id}",
+            "--env",
+            "RONDA=${ronda}",
+            "--env",
+            "PERFIL=${perfil}",
+            "--env",
+            "P95_MS=${p95_ms}",
+            "--env",
+            "RESULTS_DIR=${results_dir}",
+            "chaos/k6/flujo.js"
+          ],
+          "timeout": 600
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "\n         /\\      Grafana   /‾‾/  \n    /\\  /  \\     |\\  __   /  /   \n   /  \\/    \\    | |/ /  /   ‾‾\\ \n  /          \\   |   (  |  (‾)  |\n / __________ \\  |_|\\_\\  \\_____/ \n\n\n     execution: local\n        script: chaos/k6/flujo.js\n        output: -\n\n     scenarios: (100.00%) 1 scenario, 10 max VUs, 5m10s max duration (incl. graceful stop):\n              * flujo: Up to 10 looping VUs for 5m0s over 3 stages (gracefulRampDown: 10s, gracefulStop: 30s)\n\n\nrunning (0m01.0s), 00/10 VUs, 0 complete and 0 interrupted iterations\nflujo   [   0% ] 00/10 VUs  0m01.0s/5m00.0s\n\nrunning (0m02.0s), 00/10 VUs, 0 complete and 0 interrupted iterations\nflujo   [   1% ] 00/10 VUs  0m02.0s/5m00.0s\n\nrunning (0m03.0s), 00/10 VUs, 0 complete and 0 interrupted iterations\nflujo   [   1% ] 00/10 VUs  0m03.0s/5m00.0s\n\nrunning (0m04.0s), 01/10 VUs, 0 complete and 0 interrupted iterations\nflujo   [   1% ] 01/10 VUs  0m04.0s/5m00.0s\n\nrunning (0m05.0s), 01/10 VUs, 0 complete and 0 interrupted iterations\nflujo   [   2% ] 01/10 VUs  0m05.0s/5m00.0s\n\nrunning (0m06.0s), 01/10 VUs, 1 complete and 0 interrupted iterations\nflujo   [   2% ] 01/10 VUs  0m06.0s/5m00.0s\n\nrunning (0m07.0s), 02/10 VUs, 1 complete and 0 interrupted iterations\nflujo   [   2% ] 02/10 VUs  0m07.0s/5m00.0s\n\nrunning (0m08.0s), 02/10 VUs, 2 complete and 0 interrupted iterations\nflujo   [   3% ] 02/10 VUs  0m08.0s/5m00.0s\n\nrunning (0m09.0s), 02/10 VUs, 3 complete and 0 interrupted iterations\nflujo   [   3% ] 02/10 VUs  0m09.0s/5m00.0s\n\nrunning (0m10.0s), 03/10 VUs, 4 complete and 0 interrupted iterations\nflujo   [   3% ] 03/10 VUs  0m10.0s/5m00.0s\n\nrunning (0m11.0s), 03/10 VUs, 5 complete and 0 interrupted iterations\nflujo   [   4% ] 03/10 VUs  0m11.0s/5m00.0s\n\nrunning (0m12.0s), 03/10 VUs, 7 complete and 0 interrupted iterations\nflujo   [   4% ] 03/10 VUs  0m12.0s/5m00.0s\n\nrunning (0m13.0s), 04/10 VUs, 16 complete and 0 interrupted iterations\nflujo   [   4% ] 04/10 VUs  0m13.0s/5m00.0s\n\nrunning (0m14.0s), 04/10 VUs, 33 complete and 0 interrupted iterations\nflujo   [   5% ] 04/10 VUs  0m14.0s/5m00.0s\n\nrunning (0m15.0s), 04/10 VUs, 75 complete and 0 interrupted iterations\nflujo   [   5% ] 04/10 VUs  0m15.0s/5m00.0s\n\nrunning (0m16.0s), 05/10 VUs, 130 complete and 0 interrupted iterations\nflujo   [   5% ] 05/10 VUs  0m16.0s/5m00.0s\n\nrunning (0m17.0s), 05/10 VUs, 187 complete and 0 interrupted iterations\nflujo   [   6% ] 05/10 VUs  0m17.0s/5m00.0s\n\nrunning (0m18.0s), 05/10 VUs, 231 complete and 0 interrupted iterations\nflujo   [   6% ] 05/10 VUs  0m18.0s/5m00.0s\n\nrunning (0m19.0s), 06/10 VUs, 285 complete and 0 interrupted iterations\nflujo   [   6% ] 06/10 VUs  0m19.0s/5m00.0s\n\nrunning (0m20.0s), 06/10 VUs, 335 complete and 0 interrupted iterations\nflujo   [   7% ] 06/10 VUs  0m20.0s/5m00.0s\n\nrunning (0m21.0s), 06/10 VUs, 392 complete and 0 interrupted iterations\nflujo   [   7% ] 06/10 VUs  0m21.0s/5m00.0s\n\nrunning (0m22.0s), 07/10 VUs, 453 complete and 0 interrupted iterations\nflujo   [   7% ] 07/10 VUs  0m22.0s/5m00.0s\n\nrunning (0m23.0s), 07/10 VUs, 511 complete and 0 interrupted iterations\nflujo   [   8% ] 07/10 VUs  0m23.0s/5m00.0s\n\nrunning (0m24.0s), 07/10 VUs, 566 complete and 0 interrupted iterations\nflujo   [   8% ] 07/10 VUs  0m24.0s/5m00.0s\n\nrunning (0m25.0s), 08/10 VUs, 625 complete and 0 interrupted iterations\nflujo   [   8% ] 08/10 VUs  0m25.0s/5m00.0s\n\nrunning (0m26.0s), 08/10 VUs, 701 complete and 0 interrupted iterations\nflujo   [   9% ] 08/10 VUs  0m26.0s/5m00.0s\n\nrunning (0m27.0s), 08/10 VUs, 778 complete and 0 interrupted iterations\nflujo   [   9% ] 08/10 VUs  0m27.0s/5m00.0s\n\nrunning (0m28.0s), 09/10 VUs, 851 complete and 0 interrupted iterations\nflujo   [   9% ] 09/10 VUs  0m28.0s/5m00.0s\n\nrunning (0m29.0s), 09/10 VUs, 929 complete and 0 interrupted iterations\nflujo   [  10% ] 09/10 VUs  0m29.0s/5m00.0s\n\nrunning (0m30.0s), 09/10 VUs, 1006 complete and 0 interrupted iterations\nflujo   [  10% ] 09/10 VUs  0m30.0s/5m00.0s\n\nrunning (0m31.0s), 10/10 VUs, 1081 complete and 0 interrupted iterations\nflujo   [  10% ] 10/10 VUs  0m31.0s/5m00.0s\n\nrunning (0m32.0s), 10/10 VUs, 1150 complete and 0 interrupted iterations\nflujo   [  11% ] 10/10 VUs  0m32.0s/5m00.0s\n\nrunning (0m33.0s), 10/10 VUs, 1229 complete and 0 interrupted iterations\nflujo   [  11% ] 10/10 VUs  0m33.0s/5m00.0s\n\nrunning (0m34.0s), 10/10 VUs, 1284 complete and 0 interrupted iterations\nflujo   [  11% ] 10/10 VUs  0m34.0s/5m00.0s\n\nrunning (0m35.0s), 10/10 VUs, 1358 complete and 0 interrupted iterations\nflujo   [  12% ] 10/10 VUs  0m35.0s/5m00.0s\n\nrunning (0m36.0s), 10/10 VUs, 1415 complete and 0 interrupted iterations\nflujo   [  12% ] 10/10 VUs  0m36.0s/5m00.0s\n\nrunning (0m37.0s), 10/10 VUs, 1496 complete and 0 interrupted iterations\nflujo   [  12% ] 10/10 VUs  0m37.0s/5m00.0s\n\nrunning (0m38.0s), 10/10 VUs, 1569 complete and 0 interrupted iterations\nflujo   [  13% ] 10/10 VUs  0m38.0s/5m00.0s\n\nrunning (0m39.0s), 10/10 VUs, 1657 complete and 0 interrupted iterations\nflujo   [  13% ] 10/10 VUs  0m39.0s/5m00.0s\n\nrunning (0m40.0s), 10/10 VUs, 1722 complete and 0 interrupted iterations\nflujo   [  13% ] 10/10 VUs  0m40.0s/5m00.0s\n\nrunning (0m41.0s), 10/10 VUs, 1803 complete and 0 interrupted iterations\nflujo   [  14% ] 10/10 VUs  0m41.0s/5m00.0s\n\nrunning (0m42.0s), 10/10 VUs, 1891 complete and 0 interrupted iterations\nflujo   [  14% ] 10/10 VUs  0m42.0s/5m00.0s\n\nrunning (0m43.0s), 10/10 VUs, 1983 complete and 0 interrupted iterations\nflujo   [  14% ] 10/10 VUs  0m43.0s/5m00.0s\n\nrunning (0m44.0s), 10/10 VUs, 2062 complete and 0 interrupted iterations\nflujo   [  15% ] 10/10 VUs  0m44.0s/5m00.0s\n\nrunning (0m45.0s), 10/10 VUs, 2140 complete and 0 interrupted iterations\nflujo   [  15% ] 10/10 VUs  0m45.0s/5m00.0s\n\nrunning (0m46.0s), 10/10 VUs, 2226 complete and 0 interrupted iterations\nflujo   [  15% ] 10/10 VUs  0m46.0s/5m00.0s\n\nrunning (0m47.0s), 10/10 VUs, 2318 complete and 0 interrupted iterations\nflujo   [  16% ] 10/10 VUs  0m47.0s/5m00.0s\n\nrunning (0m48.0s), 10/10 VUs, 2400 complete and 0 interrupted iterations\nflujo   [  16% ] 10/10 VUs  0m48.0s/5m00.0s\n\nrunning (0m49.0s), 10/10 VUs, 2475 complete and 0 interrupted iterations\nflujo   [  16% ] 10/10 VUs  0m49.0s/5m00.0s\n\nrunning (0m50.0s), 10/10 VUs, 2557 complete and 0 interrupted iterations\nflujo   [  17% ] 10/10 VUs  0m50.0s/5m00.0s\n\nrunning (0m51.0s), 10/10 VUs, 2628 complete and 0 interrupted iterations\nflujo   [  17% ] 10/10 VUs  0m51.0s/5m00.0s\n\nrunning (0m52.0s), 10/10 VUs, 2687 complete and 0 interrupted iterations\nflujo   [  17% ] 10/10 VUs  0m52.0s/5m00.0s\n\nrunning (0m53.0s), 10/10 VUs, 2779 complete and 0 interrupted iterations\nflujo   [  18% ] 10/10 VUs  0m53.0s/5m00.0s\n\nrunning (0m54.0s), 10/10 VUs, 2877 complete and 0 interrupted iterations\nflujo   [  18% ] 10/10 VUs  0m54.0s/5m00.0s\n\nrunning (0m55.0s), 10/10 VUs, 2951 complete and 0 interrupted iterations\nflujo   [  18% ] 10/10 VUs  0m55.0s/5m00.0s\n\nrunning (0m56.0s), 10/10 VUs, 3048 complete and 0 interrupted iterations\nflujo   [  19% ] 10/10 VUs  0m56.0s/5m00.0s\n\nrunning (0m57.0s), 10/10 VUs, 3146 complete and 0 interrupted iterations\nflujo   [  19% ] 10/10 VUs  0m57.0s/5m00.0s\n\nrunning (0m58.0s), 10/10 VUs, 3238 complete and 0 interrupted iterations\nflujo   [  19% ] 10/10 VUs  0m58.0s/5m00.0s\n\nrunning (0m59.0s), 10/10 VUs, 3321 complete and 0 interrupted iterations\nflujo   [  20% ] 10/10 VUs  0m59.0s/5m00.0s\n\nrunning (1m00.0s), 10/10 VUs, 3373 complete and 0 interrupted iterations\nflujo   [  20% ] 10/10 VUs  1m00.0s/5m00.0s\n\nrunning (1m01.0s), 10/10 VUs, 3455 complete and 0 interrupted iterations\nflujo   [  20% ] 10/10 VUs  1m01.0s/5m00.0s\n\nrunning (1m02.0s), 10/10 VUs, 3551 complete and 0 interrupted iterations\nflujo   [  21% ] 10/10 VUs  1m02.0s/5m00.0s\n\nrunning (1m03.0s), 10/10 VUs, 3632 complete and 0 interrupted iterations\nflujo   [  21% ] 10/10 VUs  1m03.0s/5m00.0s\n\nrunning (1m04.0s), 10/10 VUs, 3731 complete and 0 interrupted iterations\nflujo   [  21% ] 10/10 VUs  1m04.0s/5m00.0s\n\nrunning (1m05.0s), 10/10 VUs, 3809 complete and 0 interrupted iterations\nflujo   [  22% ] 10/10 VUs  1m05.0s/5m00.0s\n\nrunning (1m06.0s), 10/10 VUs, 3908 complete and 0 interrupted iterations\nflujo   [  22% ] 10/10 VUs  1m06.0s/5m00.0s\n\nrunning (1m07.0s), 10/10 VUs, 3990 complete and 0 interrupted iterations\nflujo   [  22% ] 10/10 VUs  1m07.0s/5m00.0s\n\nrunning (1m08.0s), 10/10 VUs, 4081 complete and 0 interrupted iterations\nflujo   [  23% ] 10/10 VUs  1m08.0s/5m00.0s\n\nrunning (1m09.0s), 10/10 VUs, 4155 complete and 0 interrupted iterations\nflujo   [  23% ] 10/10 VUs  1m09.0s/5m00.0s\n\nrunning (1m10.0s), 10/10 VUs, 4244 complete and 0 interrupted iterations\nflujo   [  23% ] 10/10 VUs  1m10.0s/5m00.0s\n\nrunning (1m11.0s), 10/10 VUs, 4333 complete and 0 interrupted iterations\nflujo   [  24% ] 10/10 VUs  1m11.0s/5m00.0s\n\nrunning (1m12.0s), 10/10 VUs, 4423 complete and 0 interrupted iterations\nflujo   [  24% ] 10/10 VUs  1m12.0s/5m00.0s\n\nrunning (1m13.0s), 10/10 VUs, 4504 complete and 0 interrupted iterations\nflujo   [  24% ] 10/10 VUs  1m13.0s/5m00.0s\n\nrunning (1m14.0s), 10/10 VUs, 4575 complete and 0 interrupted iterations\nflujo   [  25% ] 10/10 VUs  1m14.0s/5m00.0s\n\nrunning (1m15.0s), 10/10 VUs, 4666 complete and 0 interrupted iterations\nflujo   [  25% ] 10/10 VUs  1m15.0s/5m00.0s\n\nrunning (1m16.0s), 10/10 VUs, 4770 complete and 0 interrupted iterations\nflujo   [  25% ] 10/10 VUs  1m16.0s/5m00.0s\n\nrunning (1m17.0s), 10/10 VUs, 4869 complete and 0 interrupted iterations\nflujo   [  26% ] 10/10 VUs  1m17.0s/5m00.0s\n\nrunning (1m18.0s), 10/10 VUs, 4958 complete and 0 interrupted iterations\nflujo   [  26% ] 10/10 VUs  1m18.0s/5m00.0s\n\nrunning (1m19.0s), 10/10 VUs, 5007 complete and 0 interrupted iterations\nflujo   [  26% ] 10/10 VUs  1m19.0s/5m00.0s\n\nrunning (1m20.0s), 10/10 VUs, 5065 complete and 0 interrupted iterations\nflujo   [  27% ] 10/10 VUs  1m20.0s/5m00.0s\n\nrunning (1m21.0s), 10/10 VUs, 5143 complete and 0 interrupted iterations\nflujo   [  27% ] 10/10 VUs  1m21.0s/5m00.0s\n\nrunning (1m22.0s), 10/10 VUs, 5197 complete and 0 interrupted iterations\nflujo   [  27% ] 10/10 VUs  1m22.0s/5m00.0s\n\nrunning (1m23.0s), 10/10 VUs, 5269 complete and 0 interrupted iterations\nflujo   [  28% ] 10/10 VUs  1m23.0s/5m00.0s\n\nrunning (1m24.0s), 10/10 VUs, 5355 complete and 0 interrupted iterations\nflujo   [  28% ] 10/10 VUs  1m24.0s/5m00.0s\n\nrunning (1m25.0s), 10/10 VUs, 5423 complete and 0 interrupted iterations\nflujo   [  28% ] 10/10 VUs  1m25.0s/5m00.0s\n\nrunning (1m26.0s), 10/10 VUs, 5512 complete and 0 interrupted iterations\nflujo   [  29% ] 10/10 VUs  1m26.0s/5m00.0s\n\nrunning (1m27.0s), 10/10 VUs, 5613 complete and 0 interrupted iterations\nflujo   [  29% ] 10/10 VUs  1m27.0s/5m00.0s\n\nrunning (1m28.0s), 10/10 VUs, 5718 complete and 0 interrupted iterations\nflujo   [  29% ] 10/10 VUs  1m28.0s/5m00.0s\n\nrunning (1m29.0s), 10/10 VUs, 5814 complete and 0 interrupted iterations\nflujo   [  30% ] 10/10 VUs  1m29.0s/5m00.0s\n\nrunning (1m30.0s), 10/10 VUs, 5883 complete and 0 interrupted iterations\nflujo   [  30% ] 10/10 VUs  1m30.0s/5m00.0s\n\nrunning (1m31.0s), 10/10 VUs, 5984 complete and 0 interrupted iterations\nflujo   [  30% ] 10/10 VUs  1m31.0s/5m00.0s\n\nrunning (1m32.0s), 10/10 VUs, 6090 complete and 0 interrupted iterations\nflujo   [  31% ] 10/10 VUs  1m32.0s/5m00.0s\n\nrunning (1m33.0s), 10/10 VUs, 6188 complete and 0 interrupted iterations\nflujo   [  31% ] 10/10 VUs  1m33.0s/5m00.0s\n\nrunning (1m34.0s), 10/10 VUs, 6286 complete and 0 interrupted iterations\nflujo   [  31% ] 10/10 VUs  1m34.0s/5m00.0s\n\nrunning (1m35.0s), 10/10 VUs, 6354 complete and 0 interrupted iterations\nflujo   [  32% ] 10/10 VUs  1m35.0s/5m00.0s\n\nrunning (1m36.0s), 10/10 VUs, 6427 complete and 0 interrupted iterations\nflujo   [  32% ] 10/10 VUs  1m36.0s/5m00.0s\n\nrunning (1m37.0s), 10/10 VUs, 6488 complete and 0 interrupted iterations\nflujo   [  32% ] 10/10 VUs  1m37.0s/5m00.0s\n\nrunning (1m38.0s), 10/10 VUs, 6582 complete and 0 interrupted iterations\nflujo   [  33% ] 10/10 VUs  1m38.0s/5m00.0s\n\nrunning (1m39.0s), 10/10 VUs, 6678 complete and 0 interrupted iterations\nflujo   [  33% ] 10/10 VUs  1m39.0s/5m00.0s\n\nrunning (1m40.0s), 10/10 VUs, 6749 complete and 0 interrupted iterations\nflujo   [  33% ] 10/10 VUs  1m40.0s/5m00.0s\n\nrunning (1m41.0s), 10/10 VUs, 6846 complete and 0 interrupted iterations\nflujo   [  34% ] 10/10 VUs  1m41.0s/5m00.0s\n\nrunning (1m42.0s), 10/10 VUs, 6952 complete and 0 interrupted iterations\nflujo   [  34% ] 10/10 VUs  1m42.0s/5m00.0s\n\nrunning (1m43.0s), 10/10 VUs, 7047 complete and 0 interrupted iterations\nflujo   [  34% ] 10/10 VUs  1m43.0s/5m00.0s\n\nrunning (1m44.0s), 10/10 VUs, 7142 complete and 0 interrupted iterations\nflujo   [  35% ] 10/10 VUs  1m44.0s/5m00.0s\n\nrunning (1m45.0s), 10/10 VUs, 7211 complete and 0 interrupted iterations\nflujo   [  35% ] 10/10 VUs  1m45.0s/5m00.0s\n\nrunning (1m46.0s), 10/10 VUs, 7303 complete and 0 interrupted iterations\nflujo   [  35% ] 10/10 VUs  1m46.0s/5m00.0s\n\nrunning (1m47.0s), 10/10 VUs, 7403 complete and 0 interrupted iterations\nflujo   [  36% ] 10/10 VUs  1m47.0s/5m00.0s\n\nrunning (1m48.0s), 10/10 VUs, 7485 complete and 0 interrupted iterations\nflujo   [  36% ] 10/10 VUs  1m48.0s/5m00.0s\n\nrunning (1m49.0s), 10/10 VUs, 7548 complete and 0 interrupted iterations\nflujo   [  36% ] 10/10 VUs  1m49.0s/5m00.0s\n\nrunning (1m50.0s), 10/10 VUs, 7651 complete and 0 interrupted iterations\nflujo   [  37% ] 10/10 VUs  1m50.0s/5m00.0s\n\nrunning (1m51.0s), 10/10 VUs, 7724 complete and 0 interrupted iterations\nflujo   [  37% ] 10/10 VUs  1m51.0s/5m00.0s\n\nrunning (1m52.0s), 10/10 VUs, 7833 complete and 0 interrupted iterations\nflujo   [  37% ] 10/10 VUs  1m52.0s/5m00.0s\n\nrunning (1m53.0s), 10/10 VUs, 7931 complete and 0 interrupted iterations\nflujo   [  38% ] 10/10 VUs  1m53.0s/5m00.0s\n\nrunning (1m54.0s), 10/10 VUs, 8006 complete and 0 interrupted iterations\nflujo   [  38% ] 10/10 VUs  1m54.0s/5m00.0s\n\nrunning (1m55.0s), 10/10 VUs, 8106 complete and 0 interrupted iterations\nflujo   [  38% ] 10/10 VUs  1m55.0s/5m00.0s\n\nrunning (1m56.0s), 10/10 VUs, 8209 complete and 0 interrupted iterations\nflujo   [  39% ] 10/10 VUs  1m56.0s/5m00.0s\n\nrunning (1m57.0s), 10/10 VUs, 8318 complete and 0 interrupted iterations\nflujo   [  39% ] 10/10 VUs  1m57.0s/5m00.0s\n\nrunning (1m58.0s), 10/10 VUs, 8401 complete and 0 interrupted iterations\nflujo   [  39% ] 10/10 VUs  1m58.0s/5m00.0s\n\nrunning (1m59.0s), 10/10 VUs, 8498 complete and 0 interrupted iterations\nflujo   [  40% ] 10/10 VUs  1m59.0s/5m00.0s\n\nrunning (2m00.0s), 10/10 VUs, 8588 complete and 0 interrupted iterations\nflujo   [  40% ] 10/10 VUs  2m00.0s/5m00.0s\n\nrunning (2m01.0s), 10/10 VUs, 8673 complete and 0 interrupted iterations\nflujo   [  40% ] 10/10 VUs  2m01.0s/5m00.0s\n\nrunning (2m02.0s), 10/10 VUs, 8776 complete and 0 interrupted iterations\nflujo   [  41% ] 10/10 VUs  2m02.0s/5m00.0s\n\nrunning (2m03.0s), 10/10 VUs, 8853 complete and 0 interrupted iterations\nflujo   [  41% ] 10/10 VUs  2m03.0s/5m00.0s\n\nrunning (2m04.0s), 10/10 VUs, 8944 complete and 0 interrupted iterations\nflujo   [  41% ] 10/10 VUs  2m04.0s/5m00.0s\n\nrunning (2m05.0s), 10/10 VUs, 9039 complete and 0 interrupted iterations\nflujo   [  42% ] 10/10 VUs  2m05.0s/5m00.0s\n\nrunning (2m06.0s), 10/10 VUs, 9144 complete and 0 interrupted iterations\nflujo   [  42% ] 10/10 VUs  2m06.0s/5m00.0s\n\nrunning (2m07.0s), 10/10 VUs, 9221 complete and 0 interrupted iterations\nflujo   [  42% ] 10/10 VUs  2m07.0s/5m00.0s\n\nrunning (2m08.0s), 10/10 VUs, 9316 complete and 0 interrupted iterations\nflujo   [  43% ] 10/10 VUs  2m08.0s/5m00.0s\n\nrunning (2m09.0s), 10/10 VUs, 9425 complete and 0 interrupted iterations\nflujo   [  43% ] 10/10 VUs  2m09.0s/5m00.0s\n\nrunning (2m10.0s), 10/10 VUs, 9513 complete and 0 interrupted iterations\nflujo   [  43% ] 10/10 VUs  2m10.0s/5m00.0s\n\nrunning (2m11.0s), 10/10 VUs, 9606 complete and 0 interrupted iterations\nflujo   [  44% ] 10/10 VUs  2m11.0s/5m00.0s\n\nrunning (2m12.0s), 10/10 VUs, 9673 complete and 0 interrupted iterations\nflujo   [  44% ] 10/10 VUs  2m12.0s/5m00.0s\n\nrunning (2m13.0s), 10/10 VUs, 9754 complete and 0 interrupted iterations\nflujo   [  44% ] 10/10 VUs  2m13.0s/5m00.0s\n\nrunning (2m14.0s), 10/10 VUs, 9853 complete and 0 interrupted iterations\nflujo   [  45% ] 10/10 VUs  2m14.0s/5m00.0s\n\nrunning (2m15.0s), 10/10 VUs, 9955 complete and 0 interrupted iterations\nflujo   [  45% ] 10/10 VUs  2m15.0s/5m00.0s\n\nrunning (2m16.0s), 10/10 VUs, 10036 complete and 0 interrupted iterations\nflujo   [  45% ] 10/10 VUs  2m16.0s/5m00.0s\n\nrunning (2m17.0s), 10/10 VUs, 10137 complete and 0 interrupted iterations\nflujo   [  46% ] 10/10 VUs  2m17.0s/5m00.0s\n\nrunning (2m18.0s), 10/10 VUs, 10237 complete and 0 interrupted iterations\nflujo   [  46% ] 10/10 VUs  2m18.0s/5m00.0s\n\nrunning (2m19.0s), 10/10 VUs, 10333 complete and 0 interrupted iterations\nflujo   [  46% ] 10/10 VUs  2m19.0s/5m00.0s\n\nrunning (2m20.0s), 10/10 VUs, 10437 complete and 0 interrupted iterations\nflujo   [  47% ] 10/10 VUs  2m20.0s/5m00.0s\n\nrunning (2m21.0s), 10/10 VUs, 10525 complete and 0 interrupted iterations\nflujo   [  47% ] 10/10 VUs  2m21.0s/5m00.0s\n\nrunning (2m22.0s), 10/10 VUs, 10625 complete and 0 interrupted iterations\nflujo   [  47% ] 10/10 VUs  2m22.0s/5m00.0s\n\nrunning (2m23.0s), 10/10 VUs, 10733 complete and 0 interrupted iterations\nflujo   [  48% ] 10/10 VUs  2m23.0s/5m00.0s\n\nrunning (2m24.0s), 10/10 VUs, 10825 complete and 0 interrupted iterations\nflujo   [  48% ] 10/10 VUs  2m24.0s/5m00.0s\n\nrunning (2m25.0s), 10/10 VUs, 10892 complete and 0 interrupted iterations\nflujo   [  48% ] 10/10 VUs  2m25.0s/5m00.0s\n\nrunning (2m26.0s), 10/10 VUs, 10993 complete and 0 interrupted iterations\nflujo   [  49% ] 10/10 VUs  2m26.0s/5m00.0s\n\nrunning (2m27.0s), 10/10 VUs, 11092 complete and 0 interrupted iterations\nflujo   [  49% ] 10/10 VUs  2m27.0s/5m00.0s\n\nrunning (2m28.0s), 10/10 VUs, 11190 complete and 0 interrupted iterations\nflujo   [  49% ] 10/10 VUs  2m28.0s/5m00.0s\n\nrunning (2m29.0s), 10/10 VUs, 11295 complete and 0 interrupted iterations\nflujo   [  50% ] 10/10 VUs  2m29.0s/5m00.0s\n\nrunning (2m30.0s), 10/10 VUs, 11380 complete and 0 interrupted iterations\nflujo   [  50% ] 10/10 VUs  2m30.0s/5m00.0s\n\nrunning (2m31.0s), 10/10 VUs, 11486 complete and 0 interrupted iterations\nflujo   [  50% ] 10/10 VUs  2m31.0s/5m00.0s\n\nrunning (2m32.0s), 10/10 VUs, 11596 complete and 0 interrupted iterations\nflujo   [  51% ] 10/10 VUs  2m32.0s/5m00.0s\n\nrunning (2m33.0s), 10/10 VUs, 11698 complete and 0 interrupted iterations\nflujo   [  51% ] 10/10 VUs  2m33.0s/5m00.0s\n\nrunning (2m34.0s), 10/10 VUs, 11748 complete and 0 interrupted iterations\nflujo   [  51% ] 10/10 VUs  2m34.0s/5m00.0s\n\nrunning (2m35.0s), 10/10 VUs, 11846 complete and 0 interrupted iterations\nflujo   [  52% ] 10/10 VUs  2m35.0s/5m00.0s\n\nrunning (2m36.0s), 10/10 VUs, 11941 complete and 0 interrupted iterations\nflujo   [  52% ] 10/10 VUs  2m36.0s/5m00.0s\n\nrunning (2m37.0s), 10/10 VUs, 12031 complete and 0 interrupted iterations\nflujo   [  52% ] 10/10 VUs  2m37.0s/5m00.0s\n\nrunning (2m38.0s), 10/10 VUs, 12122 complete and 0 interrupted iterations\nflujo   [  53% ] 10/10 VUs  2m38.0s/5m00.0s\n\nrunning (2m39.0s), 10/10 VUs, 12201 complete and 0 interrupted iterations\nflujo   [  53% ] 10/10 VUs  2m39.0s/5m00.0s\n\nrunning (2m40.0s), 10/10 VUs, 12306 complete and 0 interrupted iterations\nflujo   [  53% ] 10/10 VUs  2m40.0s/5m00.0s\n\nrunning (2m41.0s), 10/10 VUs, 12401 complete and 0 interrupted iterations\nflujo   [  54% ] 10/10 VUs  2m41.0s/5m00.0s\n\nrunning (2m42.0s), 10/10 VUs, 12501 complete and 0 interrupted iterations\nflujo   [  54% ] 10/10 VUs  2m42.0s/5m00.0s\n\nrunning (2m43.0s), 10/10 VUs, 12578 complete and 0 interrupted iterations\nflujo   [  54% ] 10/10 VUs  2m43.0s/5m00.0s\n\nrunning (2m44.0s), 10/10 VUs, 12676 complete and 0 interrupted iterations\nflujo   [  55% ] 10/10 VUs  2m44.0s/5m00.0s\n\nrunning (2m45.0s), 10/10 VUs, 12769 complete and 0 interrupted iterations\nflujo   [  55% ] 10/10 VUs  2m45.0s/5m00.0s\n\nrunning (2m46.0s), 10/10 VUs, 12869 complete and 0 interrupted iterations\nflujo   [  55% ] 10/10 VUs  2m46.0s/5m00.0s\n\nrunning (2m47.0s), 10/10 VUs, 12947 complete and 0 interrupted iterations\nflujo   [  56% ] 10/10 VUs  2m47.0s/5m00.0s\n\nrunning (2m48.0s), 10/10 VUs, 12999 complete and 0 interrupted iterations\nflujo   [  56% ] 10/10 VUs  2m48.0s/5m00.0s\n\nrunning (2m49.0s), 10/10 VUs, 13084 complete and 0 interrupted iterations\nflujo   [  56% ] 10/10 VUs  2m49.0s/5m00.0s\n\nrunning (2m50.0s), 10/10 VUs, 13185 complete and 0 interrupted iterations\nflujo   [  57% ] 10/10 VUs  2m50.0s/5m00.0s\n\nrunning (2m51.0s), 10/10 VUs, 13290 complete and 0 interrupted iterations\nflujo   [  57% ] 10/10 VUs  2m51.0s/5m00.0s\n\nrunning (2m52.0s), 10/10 VUs, 13377 complete and 0 interrupted iterations\nflujo   [  57% ] 10/10 VUs  2m52.0s/5m00.0s\n\nrunning (2m53.0s), 10/10 VUs, 13463 complete and 0 interrupted iterations\nflujo   [  58% ] 10/10 VUs  2m53.0s/5m00.0s\n\nrunning (2m54.0s), 10/10 VUs, 13565 complete and 0 interrupted iterations\nflujo   [  58% ] 10/10 VUs  2m54.0s/5m00.0s\n\nrunning (2m55.0s), 10/10 VUs, 13662 complete and 0 interrupted iterations\nflujo   [  58% ] 10/10 VUs  2m55.0s/5m00.0s\n\nrunning (2m56.0s), 10/10 VUs, 13769 complete and 0 interrupted iterations\nflujo   [  59% ] 10/10 VUs  2m56.0s/5m00.0s\n\nrunning (2m57.0s), 10/10 VUs, 13855 complete and 0 interrupted iterations\nflujo   [  59% ] 10/10 VUs  2m57.0s/5m00.0s\n\nrunning (2m58.0s), 10/10 VUs, 13954 complete and 0 interrupted iterations\nflujo   [  59% ] 10/10 VUs  2m58.0s/5m00.0s\n\nrunning (2m59.0s), 10/10 VUs, 14057 complete and 0 interrupted iterations\nflujo   [  60% ] 10/10 VUs  2m59.0s/5m00.0s\n\nrunning (3m00.0s), 10/10 VUs, 14150 complete and 0 interrupted iterations\nflujo   [  60% ] 10/10 VUs  3m00.0s/5m00.0s\n\nrunning (3m01.0s), 10/10 VUs, 14234 complete and 0 interrupted iterations\nflujo   [  60% ] 10/10 VUs  3m01.0s/5m00.0s\n\nrunning (3m02.0s), 10/10 VUs, 14317 complete and 0 interrupted iterations\nflujo   [  61% ] 10/10 VUs  3m02.0s/5m00.0s\n\nrunning (3m03.0s), 10/10 VUs, 14409 complete and 0 interrupted iterations\nflujo   [  61% ] 10/10 VUs  3m03.0s/5m00.0s\n\nrunning (3m04.0s), 10/10 VUs, 14513 complete and 0 interrupted iterations\nflujo   [  61% ] 10/10 VUs  3m04.0s/5m00.0s\n\nrunning (3m05.0s), 10/10 VUs, 14619 complete and 0 interrupted iterations\nflujo   [  62% ] 10/10 VUs  3m05.0s/5m00.0s\n\nrunning (3m06.0s), 10/10 VUs, 14703 complete and 0 interrupted iterations\nflujo   [  62% ] 10/10 VUs  3m06.0s/5m00.0s\n\nrunning (3m07.0s), 10/10 VUs, 14814 complete and 0 interrupted iterations\nflujo   [  62% ] 10/10 VUs  3m07.0s/5m00.0s\n\nrunning (3m08.0s), 10/10 VUs, 14912 complete and 0 interrupted iterations\nflujo   [  63% ] 10/10 VUs  3m08.0s/5m00.0s\n\nrunning (3m09.0s), 10/10 VUs, 15013 complete and 0 interrupted iterations\nflujo   [  63% ] 10/10 VUs  3m09.0s/5m00.0s\n\nrunning (3m10.0s), 10/10 VUs, 15107 complete and 0 interrupted iterations\nflujo   [  63% ] 10/10 VUs  3m10.0s/5m00.0s\n\nrunning (3m11.0s), 10/10 VUs, 15190 complete and 0 interrupted iterations\nflujo   [  64% ] 10/10 VUs  3m11.0s/5m00.0s\n\nrunning (3m12.0s), 10/10 VUs, 15292 complete and 0 interrupted iterations\nflujo   [  64% ] 10/10 VUs  3m12.0s/5m00.0s\n\nrunning (3m13.0s), 10/10 VUs, 15375 complete and 0 interrupted iterations\nflujo   [  64% ] 10/10 VUs  3m13.0s/5m00.0s\n\nrunning (3m14.0s), 10/10 VUs, 15474 complete and 0 interrupted iterations\nflujo   [  65% ] 10/10 VUs  3m14.0s/5m00.0s\n\nrunning (3m15.0s), 10/10 VUs, 15559 complete and 0 interrupted iterations\nflujo   [  65% ] 10/10 VUs  3m15.0s/5m00.0s\n\nrunning (3m16.0s), 10/10 VUs, 15653 complete and 0 interrupted iterations\nflujo   [  65% ] 10/10 VUs  3m16.0s/5m00.0s\n\nrunning (3m17.0s), 10/10 VUs, 15757 complete and 0 interrupted iterations\nflujo   [  66% ] 10/10 VUs  3m17.0s/5m00.0s\n\nrunning (3m18.0s), 10/10 VUs, 15852 complete and 0 interrupted iterations\nflujo   [  66% ] 10/10 VUs  3m18.0s/5m00.0s\n\nrunning (3m19.0s), 10/10 VUs, 15937 complete and 0 interrupted iterations\nflujo   [  66% ] 10/10 VUs  3m19.0s/5m00.0s\n\nrunning (3m20.0s), 10/10 VUs, 16022 complete and 0 interrupted iterations\nflujo   [  67% ] 10/10 VUs  3m20.0s/5m00.0s\n\nrunning (3m21.0s), 10/10 VUs, 16126 complete and 0 interrupted iterations\nflujo   [  67% ] 10/10 VUs  3m21.0s/5m00.0s\n\nrunning (3m22.0s), 10/10 VUs, 16233 complete and 0 interrupted iterations\nflujo   [  67% ] 10/10 VUs  3m22.0s/5m00.0s\n\nrunning (3m23.0s), 10/10 VUs, 16336 complete and 0 interrupted iterations\nflujo   [  68% ] 10/10 VUs  3m23.0s/5m00.0s\n\nrunning (3m24.0s), 10/10 VUs, 16404 complete and 0 interrupted iterations\nflujo   [  68% ] 10/10 VUs  3m24.0s/5m00.0s\n\nrunning (3m25.0s), 10/10 VUs, 16482 complete and 0 interrupted iterations\nflujo   [  68% ] 10/10 VUs  3m25.0s/5m00.0s\n\nrunning (3m26.0s), 10/10 VUs, 16579 complete and 0 interrupted iterations\nflujo   [  69% ] 10/10 VUs  3m26.0s/5m00.0s\n\nrunning (3m27.0s), 10/10 VUs, 16676 complete and 0 interrupted iterations\nflujo   [  69% ] 10/10 VUs  3m27.0s/5m00.0s\n\nrunning (3m28.0s), 10/10 VUs, 16777 complete and 0 interrupted iterations\nflujo   [  69% ] 10/10 VUs  3m28.0s/5m00.0s\n\nrunning (3m29.0s), 10/10 VUs, 16854 complete and 0 interrupted iterations\nflujo   [  70% ] 10/10 VUs  3m29.0s/5m00.0s\n\nrunning (3m30.0s), 10/10 VUs, 16962 complete and 0 interrupted iterations\nflujo   [  70% ] 10/10 VUs  3m30.0s/5m00.0s\n\nrunning (3m31.0s), 10/10 VUs, 17068 complete and 0 interrupted iterations\nflujo   [  70% ] 10/10 VUs  3m31.0s/5m00.0s\n\nrunning (3m32.0s), 10/10 VUs, 17169 complete and 0 interrupted iterations\nflujo   [  71% ] 10/10 VUs  3m32.0s/5m00.0s\n\nrunning (3m33.0s), 10/10 VUs, 17244 complete and 0 interrupted iterations\nflujo   [  71% ] 10/10 VUs  3m33.0s/5m00.0s\n\nrunning (3m34.0s), 10/10 VUs, 17335 complete and 0 interrupted iterations\nflujo   [  71% ] 10/10 VUs  3m34.0s/5m00.0s\n\nrunning (3m35.0s), 10/10 VUs, 17442 complete and 0 interrupted iterations\nflujo   [  72% ] 10/10 VUs  3m35.0s/5m00.0s\n\nrunning (3m36.0s), 10/10 VUs, 17534 complete and 0 interrupted iterations\nflujo   [  72% ] 10/10 VUs  3m36.0s/5m00.0s\n\nrunning (3m37.0s), 10/10 VUs, 17612 complete and 0 interrupted iterations\nflujo   [  72% ] 10/10 VUs  3m37.0s/5m00.0s\n\nrunning (3m38.0s), 10/10 VUs, 17694 complete and 0 interrupted iterations\nflujo   [  73% ] 10/10 VUs  3m38.0s/5m00.0s\n\nrunning (3m39.0s), 10/10 VUs, 17793 complete and 0 interrupted iterations\nflujo   [  73% ] 10/10 VUs  3m39.0s/5m00.0s\n\nrunning (3m40.0s), 10/10 VUs, 17901 complete and 0 interrupted iterations\nflujo   [  73% ] 10/10 VUs  3m40.0s/5m00.0s\n\nrunning (3m41.0s), 10/10 VUs, 17996 complete and 0 interrupted iterations\nflujo   [  74% ] 10/10 VUs  3m41.0s/5m00.0s\n\nrunning (3m42.0s), 10/10 VUs, 18086 complete and 0 interrupted iterations\nflujo   [  74% ] 10/10 VUs  3m42.0s/5m00.0s\n\nrunning (3m43.0s), 10/10 VUs, 18186 complete and 0 interrupted iterations\nflujo   [  74% ] 10/10 VUs  3m43.0s/5m00.0s\n\nrunning (3m44.0s), 10/10 VUs, 18294 complete and 0 interrupted iterations\nflujo   [  75% ] 10/10 VUs  3m44.0s/5m00.0s\n\nrunning (3m45.0s), 10/10 VUs, 18403 complete and 0 interrupted iterations\nflujo   [  75% ] 10/10 VUs  3m45.0s/5m00.0s\n\nrunning (3m46.0s), 10/10 VUs, 18488 complete and 0 interrupted iterations\nflujo   [  75% ] 10/10 VUs  3m46.0s/5m00.0s\n\nrunning (3m47.0s), 10/10 VUs, 18592 complete and 0 interrupted iterations\nflujo   [  76% ] 10/10 VUs  3m47.0s/5m00.0s\n\nrunning (3m48.0s), 10/10 VUs, 18683 complete and 0 interrupted iterations\nflujo   [  76% ] 10/10 VUs  3m48.0s/5m00.0s\n\nrunning (3m49.0s), 10/10 VUs, 18767 complete and 0 interrupted iterations\nflujo   [  76% ] 10/10 VUs  3m49.0s/5m00.0s\n\nrunning (3m50.0s), 10/10 VUs, 18863 complete and 0 interrupted iterations\nflujo   [  77% ] 10/10 VUs  3m50.0s/5m00.0s\n\nrunning (3m51.0s), 10/10 VUs, 18952 complete and 0 interrupted iterations\nflujo   [  77% ] 10/10 VUs  3m51.0s/5m00.0s\n\nrunning (3m52.0s), 10/10 VUs, 19063 complete and 0 interrupted iterations\nflujo   [  77% ] 10/10 VUs  3m52.0s/5m00.0s\n\nrunning (3m53.0s), 10/10 VUs, 19159 complete and 0 interrupted iterations\nflujo   [  78% ] 10/10 VUs  3m53.0s/5m00.0s\n\nrunning (3m54.0s), 10/10 VUs, 19266 complete and 0 interrupted iterations\nflujo   [  78% ] 10/10 VUs  3m54.0s/5m00.0s\n\nrunning (3m55.0s), 10/10 VUs, 19343 complete and 0 interrupted iterations\nflujo   [  78% ] 10/10 VUs  3m55.0s/5m00.0s\n\nrunning (3m56.0s), 10/10 VUs, 19451 complete and 0 interrupted iterations\nflujo   [  79% ] 10/10 VUs  3m56.0s/5m00.0s\n\nrunning (3m57.0s), 10/10 VUs, 19549 complete and 0 interrupted iterations\nflujo   [  79% ] 10/10 VUs  3m57.0s/5m00.0s\n\nrunning (3m58.0s), 10/10 VUs, 19655 complete and 0 interrupted iterations\nflujo   [  79% ] 10/10 VUs  3m58.0s/5m00.0s\n\nrunning (3m59.0s), 10/10 VUs, 19744 complete and 0 interrupted iterations\nflujo   [  80% ] 10/10 VUs  3m59.0s/5m00.0s\n\nrunning (4m00.0s), 10/10 VUs, 19842 complete and 0 interrupted iterations\nflujo   [  80% ] 10/10 VUs  4m00.0s/5m00.0s\n\nrunning (4m01.0s), 10/10 VUs, 19933 complete and 0 interrupted iterations\nflujo   [  80% ] 10/10 VUs  4m01.0s/5m00.0s\n\nrunning (4m02.0s), 10/10 VUs, 20028 complete and 0 interrupted iterations\nflujo   [  81% ] 10/10 VUs  4m02.0s/5m00.0s\n\nrunning (4m03.0s), 10/10 VUs, 20123 complete and 0 interrupted iterations\nflujo   [  81% ] 10/10 VUs  4m03.0s/5m00.0s\n\nrunning (4m04.0s), 10/10 VUs, 20199 complete and 0 interrupted iterations\nflujo   [  81% ] 10/10 VUs  4m04.0s/5m00.0s\n\nrunning (4m05.0s), 10/10 VUs, 20296 complete and 0 interrupted iterations\nflujo   [  82% ] 10/10 VUs  4m05.0s/5m00.0s\n\nrunning (4m06.0s), 10/10 VUs, 20404 complete and 0 interrupted iterations\nflujo   [  82% ] 10/10 VUs  4m06.0s/5m00.0s\n\nrunning (4m07.0s), 10/10 VUs, 20503 complete and 0 interrupted iterations\nflujo   [  82% ] 10/10 VUs  4m07.0s/5m00.0s\n\nrunning (4m08.0s), 10/10 VUs, 20587 complete and 0 interrupted iterations\nflujo   [  83% ] 10/10 VUs  4m08.0s/5m00.0s\n\nrunning (4m09.0s), 10/10 VUs, 20690 complete and 0 interrupted iterations\nflujo   [  83% ] 10/10 VUs  4m09.0s/5m00.0s\n\nrunning (4m10.0s), 10/10 VUs, 20798 complete and 0 interrupted iterations\nflujo   [  83% ] 10/10 VUs  4m10.0s/5m00.0s\n\nrunning (4m11.0s), 10/10 VUs, 20905 complete and 0 interrupted iterations\nflujo   [  84% ] 10/10 VUs  4m11.0s/5m00.0s\n\nrunning (4m12.0s), 10/10 VUs, 21002 complete and 0 interrupted iterations\nflujo   [  84% ] 10/10 VUs  4m12.0s/5m00.0s\n\nrunning (4m13.0s), 10/10 VUs, 21076 complete and 0 interrupted iterations\nflujo   [  84% ] 10/10 VUs  4m13.0s/5m00.0s\n\nrunning (4m14.0s), 10/10 VUs, 21164 complete and 0 interrupted iterations\nflujo   [  85% ] 10/10 VUs  4m14.0s/5m00.0s\n\nrunning (4m15.0s), 10/10 VUs, 21264 complete and 0 interrupted iterations\nflujo   [  85% ] 10/10 VUs  4m15.0s/5m00.0s\n\nrunning (4m16.0s), 10/10 VUs, 21357 complete and 0 interrupted iterations\nflujo   [  85% ] 10/10 VUs  4m16.0s/5m00.0s\n\nrunning (4m17.0s), 10/10 VUs, 21438 complete and 0 interrupted iterations\nflujo   [  86% ] 10/10 VUs  4m17.0s/5m00.0s\n\nrunning (4m18.0s), 10/10 VUs, 21534 complete and 0 interrupted iterations\nflujo   [  86% ] 10/10 VUs  4m18.0s/5m00.0s\n\nrunning (4m19.0s), 10/10 VUs, 21622 complete and 0 interrupted iterations\nflujo   [  86% ] 10/10 VUs  4m19.0s/5m00.0s\n\nrunning (4m20.0s), 10/10 VUs, 21711 complete and 0 interrupted iterations\nflujo   [  87% ] 10/10 VUs  4m20.0s/5m00.0s\n\nrunning (4m21.0s), 10/10 VUs, 21807 complete and 0 interrupted iterations\nflujo   [  87% ] 10/10 VUs  4m21.0s/5m00.0s\n\nrunning (4m22.0s), 10/10 VUs, 21901 complete and 0 interrupted iterations\nflujo   [  87% ] 10/10 VUs  4m22.0s/5m00.0s\n\nrunning (4m23.0s), 10/10 VUs, 21991 complete and 0 interrupted iterations\nflujo   [  88% ] 10/10 VUs  4m23.0s/5m00.0s\n\nrunning (4m24.0s), 10/10 VUs, 22072 complete and 0 interrupted iterations\nflujo   [  88% ] 10/10 VUs  4m24.0s/5m00.0s\n\nrunning (4m25.0s), 10/10 VUs, 22160 complete and 0 interrupted iterations\nflujo   [  88% ] 10/10 VUs  4m25.0s/5m00.0s\n\nrunning (4m26.0s), 10/10 VUs, 22245 complete and 0 interrupted iterations\nflujo   [  89% ] 10/10 VUs  4m26.0s/5m00.0s\n\nrunning (4m27.0s), 10/10 VUs, 22333 complete and 0 interrupted iterations\nflujo   [  89% ] 10/10 VUs  4m27.0s/5m00.0s\n\nrunning (4m28.0s), 10/10 VUs, 22431 complete and 0 interrupted iterations\nflujo   [  89% ] 10/10 VUs  4m28.0s/5m00.0s\n\nrunning (4m29.0s), 10/10 VUs, 22530 complete and 0 interrupted iterations\nflujo   [  90% ] 10/10 VUs  4m29.0s/5m00.0s\n\nrunning (4m30.0s), 10/10 VUs, 22629 complete and 0 interrupted iterations\nflujo   [  90% ] 10/10 VUs  4m30.0s/5m00.0s\n\nrunning (4m31.0s), 10/10 VUs, 22724 complete and 0 interrupted iterations\nflujo   [  90% ] 10/10 VUs  4m31.0s/5m00.0s\n\nrunning (4m32.0s), 10/10 VUs, 22805 complete and 0 interrupted iterations\nflujo   [  91% ] 10/10 VUs  4m32.0s/5m00.0s\n\nrunning (4m33.0s), 10/10 VUs, 22895 complete and 0 interrupted iterations\nflujo   [  91% ] 10/10 VUs  4m33.0s/5m00.0s\n\nrunning (4m34.0s), 09/10 VUs, 22976 complete and 0 interrupted iterations\nflujo   [  91% ] 09/10 VUs  4m34.0s/5m00.0s\n\nrunning (4m35.0s), 09/10 VUs, 23072 complete and 0 interrupted iterations\nflujo   [  92% ] 09/10 VUs  4m35.0s/5m00.0s\n\nrunning (4m36.0s), 09/10 VUs, 23158 complete and 0 interrupted iterations\nflujo   [  92% ] 09/10 VUs  4m36.0s/5m00.0s\n\nrunning (4m37.0s), 08/10 VUs, 23241 complete and 0 interrupted iterations\nflujo   [  92% ] 08/10 VUs  4m37.0s/5m00.0s\n\nrunning (4m38.0s), 08/10 VUs, 23309 complete and 0 interrupted iterations\nflujo   [  93% ] 08/10 VUs  4m38.0s/5m00.0s\n\nrunning (4m39.0s), 08/10 VUs, 23405 complete and 0 interrupted iterations\nflujo   [  93% ] 08/10 VUs  4m39.0s/5m00.0s\n\nrunning (4m40.0s), 07/10 VUs, 23489 complete and 0 interrupted iterations\nflujo   [  93% ] 07/10 VUs  4m40.0s/5m00.0s\n\nrunning (4m41.0s), 07/10 VUs, 23565 complete and 0 interrupted iterations\nflujo   [  94% ] 07/10 VUs  4m41.0s/5m00.0s\n\nrunning (4m42.0s), 07/10 VUs, 23643 complete and 0 interrupted iterations\nflujo   [  94% ] 07/10 VUs  4m42.0s/5m00.0s\n\nrunning (4m43.0s), 06/10 VUs, 23713 complete and 0 interrupted iterations\nflujo   [  94% ] 06/10 VUs  4m43.0s/5m00.0s\n\nrunning (4m44.0s), 06/10 VUs, 23780 complete and 0 interrupted iterations\nflujo   [  95% ] 06/10 VUs  4m44.0s/5m00.0s\n\nrunning (4m45.0s), 06/10 VUs, 23856 complete and 0 interrupted iterations\nflujo   [  95% ] 06/10 VUs  4m45.0s/5m00.0s\n\nrunning (4m46.0s), 05/10 VUs, 23919 complete and 0 interrupted iterations\nflujo   [  95% ] 05/10 VUs  4m46.0s/5m00.0s\n\nrunning (4m47.0s), 05/10 VUs, 23983 complete and 0 interrupted iterations\nflujo   [  96% ] 05/10 VUs  4m47.0s/5m00.0s\n\nrunning (4m48.0s), 05/10 VUs, 24042 complete and 0 interrupted iterations\nflujo   [  96% ] 05/10 VUs  4m48.0s/5m00.0s\n\nrunning (4m49.0s), 04/10 VUs, 24073 complete and 0 interrupted iterations\nflujo   [  96% ] 04/10 VUs  4m49.0s/5m00.0s\n\nrunning (4m50.0s), 04/10 VUs, 24105 complete and 0 interrupted iterations\nflujo   [  97% ] 04/10 VUs  4m50.0s/5m00.0s\n\nrunning (4m51.0s), 04/10 VUs, 24151 complete and 0 interrupted iterations\nflujo   [  97% ] 04/10 VUs  4m51.0s/5m00.0s\n\nrunning (4m52.0s), 03/10 VUs, 24186 complete and 0 interrupted iterations\nflujo   [  97% ] 03/10 VUs  4m52.0s/5m00.0s\n\nrunning (4m53.0s), 03/10 VUs, 24222 complete and 0 interrupted iterations\nflujo   [  98% ] 03/10 VUs  4m53.0s/5m00.0s\n\nrunning (4m54.0s), 03/10 VUs, 24261 complete and 0 interrupted iterations\nflujo   [  98% ] 03/10 VUs  4m54.0s/5m00.0s\n\nrunning (4m55.0s), 02/10 VUs, 24287 complete and 0 interrupted iterations\nflujo   [  98% ] 02/10 VUs  4m55.0s/5m00.0s\n\nrunning (4m56.0s), 02/10 VUs, 24312 complete and 0 interrupted iterations\nflujo   [  99% ] 02/10 VUs  4m56.0s/5m00.0s\n\nrunning (4m57.0s), 02/10 VUs, 24339 complete and 0 interrupted iterations\nflujo   [  99% ] 02/10 VUs  4m57.0s/5m00.0s\n\nrunning (4m58.0s), 01/10 VUs, 24353 complete and 0 interrupted iterations\nflujo   [  99% ] 01/10 VUs  4m58.0s/5m00.0s\n\nrunning (4m59.0s), 01/10 VUs, 24366 complete and 0 interrupted iterations\nflujo   [ 100% ] 01/10 VUs  4m59.0s/5m00.0s\n\nrunning (5m00.0s), 01/10 VUs, 24379 complete and 0 interrupted iterations\nflujo   [ 100% ] 01/10 VUs  5m00.0s/5m00.0s\n     ✓ estado 200\n     ✓ trace id devuelto\n     ✓ cuerpo con dependencias\n\n   ✓ checks.........................: 100.00% ✓ 73140    ✗ 0    \n     data_received..................: 21 MB   68 kB/s\n     data_sent......................: 3.8 MB  13 kB/s\n     dependencia_angel_ms...........: avg=4.73ms   min=0s      med=0s      p(90)=0s       p(95)=0s       p(99)=0s       max=2.08s   \n     dependencia_juan_ms............: avg=58.14ms  min=33ms    med=49ms    p(90)=84ms     p(95)=105ms    p(99)=198ms    max=1.1s    \n     flujo_circuito_abierto.........: 99.76%  ✓ 24323    ✗ 57   \n     flujo_degradado................: 100.00% ✓ 24380    ✗ 0    \n     http_req_blocked...............: avg=15.35µs  min=579ns   med=1.98µs  p(90)=2.54µs   p(95)=2.82µs   p(99)=3.9µs    max=33.15ms \n     http_req_connecting............: avg=13.22µs  min=0s      med=0s      p(90)=0s       p(95)=0s       p(99)=0s       max=33.09ms \n   ✓ http_req_duration..............: avg=110.64ms min=68.31ms med=93.73ms p(90)=149.57ms p(95)=193ms    p(99)=401.04ms max=2.39s   \n       { expected_response:true }...: avg=110.64ms min=68.31ms med=93.73ms p(90)=149.57ms p(95)=193ms    p(99)=401.04ms max=2.39s   \n   ✓ http_req_failed................: 0.00%   ✓ 0        ✗ 24380\n     http_req_receiving.............: avg=32.31µs  min=7.85µs  med=32.48µs p(90)=38.8µs   p(95)=43.95µs  p(99)=59.17µs  max=387.08µs\n     http_req_sending...............: avg=7.7µs    min=2.31µs  med=7.05µs  p(90)=9.58µs   p(95)=10.4µs   p(99)=19.13µs  max=791.31µs\n     http_req_tls_handshaking.......: avg=0s       min=0s      med=0s      p(90)=0s       p(95)=0s       p(99)=0s       max=0s      \n     http_req_waiting...............: avg=110.6ms  min=68.28ms med=93.68ms p(90)=149.53ms p(95)=192.96ms p(99)=401ms    max=2.39s   \n     http_reqs......................: 24380   81.26573/s\n     iteration_duration.............: avg=110.75ms min=68.41ms med=93.83ms p(90)=149.68ms p(95)=193.31ms p(99)=401.16ms max=2.39s   \n     iterations.....................: 24380   81.26573/s\n     vus............................: 1       min=0      max=10 \n     vus_max........................: 10      min=10     max=10 \nrunning (5m00.0s), 00/10 VUs, 24380 complete and 0 interrupted iterations\nflujo ✓ [ 100% ] 00/10 VUs  5m0s\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:26:36.835121+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:31:36.971610+00:00",
+      "duration": 300.136489
+    }
+  ],
+  "rollbacks": [
+    {
+      "activity": {
+        "type": "action",
+        "name": "revertir-la-latencia",
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "revertir",
+            "--peer",
+            "angel"
+          ],
+          "timeout": 30
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"resultado\": {\n    \"eliminados\": 1\n  }\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:31:37.236264+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:31:37.357568+00:00",
+      "duration": 0.121304
+    },
+    {
+      "activity": {
+        "type": "probe",
+        "name": "despues-no-quedan-fallos-activos",
+        "tolerance": 0,
+        "secrets": [
+          "caos"
+        ],
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "sin-fallos"
+          ],
+          "timeout": 30
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\n  \"ok\": true,\n  \"status\": 200,\n  \"activos\": []\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:31:37.357694+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:31:37.476994+00:00",
+      "duration": 0.1193
+    },
+    {
+      "activity": {
+        "type": "probe",
+        "name": "el-sistema-volvio-al-estado-estable",
+        "tolerance": 0,
+        "provider": {
+          "type": "process",
+          "path": "node",
+          "arguments": [
+            "chaos/probes.js",
+            "flujo",
+            "--max-ms",
+            "${p95_ms}",
+            "--imagen",
+            "${imagen_id}"
+          ],
+          "timeout": 45
+        }
+      },
+      "output": {
+        "status": 1,
+        "stdout": "{\n  \"ok\": false,\n  \"status\": 200,\n  \"ms\": 2330,\n  \"max_ms\": 2000,\n  \"traceId\": \"64917ef7-7ae3-4074-9af4-89f175a4d0fe\",\n  \"ronda\": \"1\",\n  \"degradado\": true,\n  \"dependencias\": {\n    \"angel\": {\n      \"estado\": \"timeout\",\n      \"duracion_ms\": 2001,\n      \"nube\": \"aws\",\n      \"entidad\": \"animal\",\n      \"detalle\": \"The operation was aborted\"\n    },\n    \"juan\": {\n      \"estado\": \"ok\",\n      \"duracion_ms\": 236,\n      \"nube\": \"railway\",\n      \"entidad\": \"vuelo\",\n      \"detalle\": null\n    }\n  }\n}\n",
+        "stderr": ""
+      },
+      "start": "2026-11-18T05:31:37.477122+00:00",
+      "status": "succeeded",
+      "end": "2026-11-18T05:31:39.828757+00:00",
+      "duration": 2.351635
+    }
+  ],
+  "end": "2026-11-18T05:31:39.828825+00:00",
+  "duration": 310.9063277244568
+}

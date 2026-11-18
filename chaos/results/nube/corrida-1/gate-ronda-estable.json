@@ -1,0 +1,20 @@
+{
+  "veredicto": "APROBADO",
+  "razones": [],
+  "k6": {
+    "peticiones": 18039,
+    "p95_ms": 249.50758669999996,
+    "p99_ms": 386.16723219999994,
+    "error_rate": 0.00011087089084760796,
+    "degradado_rate": 0,
+    "circuito_abierto_rate": 0,
+    "angel_p95_ms": 75,
+    "umbrales_rotos": []
+  },
+  "chaos_toolkit": null,
+  "slo": {
+    "p95_ms": 2000,
+    "error_rate_max": 0.05,
+    "peticiones_minimas": 300
+  }
+}

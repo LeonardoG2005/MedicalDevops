@@ -1,0 +1,32 @@
+{
+  "veredicto": "RECHAZADO",
+  "razones": [
+    "p95 3127 ms supera el umbral de 2000 ms",
+    "Umbral de k6 incumplido: http_req_duration: p(95)<2000",
+    "Chaos Toolkit marco el experimento como desviado: la hipotesis se refuto"
+  ],
+  "k6": {
+    "peticiones": 872,
+    "p95_ms": 3126.78264725,
+    "p99_ms": 3327.9378485099996,
+    "error_rate": 0,
+    "degradado_rate": 0,
+    "circuito_abierto_rate": 0,
+    "angel_p95_ms": 3037,
+    "umbrales_rotos": [
+      "http_req_duration: p(95)<2000"
+    ]
+  },
+  "chaos_toolkit": {
+    "status": "completed",
+    "deviated": true,
+    "rollbacks_fallidos": [],
+    "estado_estable_antes": true,
+    "estado_estable_despues": false
+  },
+  "slo": {
+    "p95_ms": 2000,
+    "error_rate_max": 0.05,
+    "peticiones_minimas": 300
+  }
+}
