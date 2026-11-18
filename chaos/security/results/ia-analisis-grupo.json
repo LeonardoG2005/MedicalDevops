@@ -106,8 +106,8 @@
     ],
     "comparacion_con_la_corrida_anterior": "La corrida anterior del 2026-11-17 incluia un experimento 3 que no forma parte de la version de 2 personas; se repitio solo con los experimentos 1, 2 y 4. Ya no inventa \"problemas de autenticacion\" ni \"problemas de retencion\", pero aparece una exageracion nueva (exfiltracion). Misma conclusion: la propuesta sirve para agrupar, no para diagnosticar.",
     "preparado_por": "Claude (asistente), contra la telemetria real, 2026-11-17",
-    "revisado_por": null,
-    "revisado_en": null,
-    "pendiente": "Leonardo debe revisar y firmar (revisado_por, revisado_en). La decision sobre cada punto es humana."
+    "revisado_por": "Leonardo Guevara",
+    "revisado_en": "2026-11-18",
+    "pendiente": null
   }
 }
