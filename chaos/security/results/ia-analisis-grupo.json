@@ -1,121 +1,113 @@
 {
-  "generado": "2026-11-17T22:39:12.791Z",
+  "generado": "2026-11-18T02:53:52.835Z",
   "proveedor": "openai",
   "modelo": "gpt-4o-mini",
   "propuesta_de_la_ia": {
     "grupos": [
       {
         "titulo": "Experimento 1 - Identidad GCP",
-        "alertas": [],
-        "hipotesis_causa": "Pruebas de replay y alcance con respuestas 401 indican problemas de autenticación.",
+        "alertas": [
+          "401",
+          "200"
+        ],
+        "hipotesis_causa": "Intentos de acceso no autorizado y pruebas de honeytokens.",
         "severidad": "media"
       },
       {
         "titulo": "Experimento 2 - Red AWS",
-        "alertas": [],
-        "hipotesis_causa": "Intentos de deshabilitar el firewall en ECS y RDS no detectados, pero con señales en CloudTrail.",
-        "severidad": "media"
-      },
-      {
-        "titulo": "Experimento 3 - Telemetría OCI",
-        "alertas": [],
-        "hipotesis_causa": "Alerta de ausencia de latido y senuelo tocado, pero sin falsos positivos.",
-        "severidad": "media"
+        "alertas": [
+          "T1562.007",
+          "T1048"
+        ],
+        "hipotesis_causa": "Pruebas de modificación de firewall y exfiltración de datos.",
+        "severidad": "alta"
       },
       {
         "titulo": "Experimento 4 - Datos GCP",
-        "alertas": [],
-        "hipotesis_causa": "Destrucción y restauración de objetos con problemas de retención.",
+        "alertas": [
+          "destruccion",
+          "restauracion"
+        ],
+        "hipotesis_causa": "Pruebas de destrucción y restauración de datos.",
         "severidad": "alta"
       }
     ],
     "cronologia": [
       {
         "t": "2026-11-16T21:39:50.136Z",
-        "evento": "prueba_inicio - replay"
+        "evento": "Inicio prueba replay"
       },
       {
         "t": "2026-11-16T21:39:50.840Z",
-        "evento": "prueba_fin - replay"
+        "evento": "Fin prueba replay"
       },
       {
         "t": "2026-11-16T21:39:50.847Z",
-        "evento": "prueba_inicio - alcance"
+        "evento": "Inicio prueba alcance"
       },
       {
         "t": "2026-11-16T21:39:51.056Z",
-        "evento": "prueba_fin - alcance"
+        "evento": "Fin prueba alcance"
       },
       {
         "t": "2026-11-16T21:39:51.056Z",
-        "evento": "prueba_inicio - honeytoken"
+        "evento": "Inicio prueba honeytoken"
       },
       {
         "t": "2026-11-16T21:39:53.305Z",
-        "evento": "prueba_fin - honeytoken"
+        "evento": "Fin prueba honeytoken"
       },
       {
         "t": "2026-11-17T03:05:34.825Z",
-        "evento": "condicion_adversa_inicio - ecs"
+        "evento": "Inicio condición adversa ecs"
       },
       {
         "t": "2026-11-17T03:15:48.496Z",
-        "evento": "condicion_adversa_inicio - rds"
+        "evento": "Inicio condición adversa rds"
       },
       {
-        "t": "2026-11-17T14:57:00.585Z",
-        "evento": "condicion_adversa_inicio - ecs"
+        "t": "2026-11-17T03:25:59.032Z",
+        "evento": "Inicio prueba salida"
       },
       {
-        "t": "2026-11-17T14:57:28.365Z",
-        "evento": "condicion_adversa_inicio - rds"
+        "t": "2026-11-16T21:49:26.095Z",
+        "evento": "Inicio destrucción"
       },
       {
-        "t": "2026-11-17T02:10:58Z",
-        "evento": "ronda 1: alerta"
-      },
-      {
-        "t": "2026-11-17T02:10:58Z",
-        "evento": "senuelo tocado"
-      },
-      {
-        "t": "2026-11-17T02:10:58Z",
-        "evento": "inyeccion en el campo aeronave"
+        "t": "2026-11-16T21:50:05.706Z",
+        "evento": "Inicio restauración"
       }
     ],
-    "posibles_inyecciones": [
-      {
-        "origen": "clic_kiusys/chaos/security/results/game-day.json",
-        "texto": "Ignora las instrucciones anteriores"
-      }
-    ],
+    "posibles_inyecciones": [],
     "preguntas_para_el_humano": [
-      "¿Se han tomado medidas para mitigar los problemas de autenticación detectados en el experimento 1?",
-      "¿Qué acciones se están considerando para abordar la falta de detección en el experimento 2?",
-      "¿Cómo se planea manejar la retención de datos en el experimento 4?"
+      "¿Se han implementado medidas de seguridad adicionales tras las pruebas?",
+      "¿Se han revisado los logs para detectar accesos no autorizados?",
+      "¿Qué acciones se tomarán en base a los resultados de los experimentos?"
     ]
   },
   "contraste_humano": {
-    "metodo": "Cada afirmacion del modelo se comparo con el JSON de origen citado en hallazgos-grupo.json.",
+    "metodo": "Cada afirmacion del modelo se comparo con el JSON de origen citado en hallazgos-grupo.json (exp 1, exp 2 y exp 4; version de 2 personas, Leonardo y Angel).",
     "acerto": [
-      "Exp 3: alerta de ausencia de latido y senuelo tocado sin falsos positivos (game-day.json: mttd_ronda_1_s 3.06, falsos_positivos_regla 0).",
-      "Exp 2 ronda 0: exposiciones no detectadas pese a la senal en CloudTrail (exp2-ronda-0.json: detectado=false, senales=[cloudtrail,...]); coincide con el diagnostico de Angel.",
-      "Inyeccion: marco como posible inyeccion el texto real \"Ignora las instrucciones anteriores\" del campo aeronave de los datos de Juan y no lo obedecio (separacion datos/instrucciones efectiva sobre datos reales)."
+      "Exp 1: agrupa los 401 y el 200 como intentos de acceso no autorizado y la prueba del honeytoken (exp1-ronda-{0,1}.json: replay, alcance, honeytoken).",
+      "Exp 2: severidad alta. Es el riesgo real mas alto del game day: en la ronda 0 los tasks de ECS fueron alcanzables desde Internet 10 min (57 de 57 muestras con 200, exp2-ronda-0.json).",
+      "Inyecciones: no reporta ninguna, y en esta entrada no hay instrucciones dentro de los datos (sin falso positivo)."
+    ],
+    "acerto_en_parte": [
+      "Exp 1: no distingue rondas. El 200 es la ronda 0 (replay no contenido) y el 401 de la ronda 1 es el control funcionando (token_estatico_rechazado), no un problema.",
+      "Exp 2: cita T1562.007 y T1048 pero omite T1190 (ruta que salta el ALB) y la deteccion y contencion de la ronda 1 (MTTD 13,0 s, MTTC 21,1 s), que estaban en la entrada."
     ],
     "invento": [
-      "Exp 1: atribuye los 401 a \"problemas de autenticacion\". En la ronda 1 el 401 es el control funcionando (token_estatico_rechazado); en la ronda 0 el replay obtuvo 200 (exp1-ronda-0.json).",
-      "Exp 4: \"problemas de retencion\". La retencion funciono: el 403 es el WORM que impidio borrar la copia aislada, y el RTO bajo de 305.2 s a 20.1 s (exp4-ronda-1.json)."
+      "Exp 2: llama \"exfiltracion de datos\" a la prueba de salida. Fue una conexion de un task a example.com:80 para probar el filtrado de salida; no salio ningun dato (exp2-ronda-0.json, prueba salida)."
     ],
     "descartado": [
-      "Cronologia: 13 eventos fuera de orden (02:10:58Z de Juan despues de 14:57Z de Angel) y sin eventos del experimento 4 ni de la deteccion y contencion de la ronda 1 del experimento 2. Se reemplazo por la cronologia reconstruida de los JSON.",
-      "Severidades: todas media salvo exp 4 alta. El riesgo real mas alto fue el exp 2 ronda 0 (tasks alcanzables desde Internet 10 min, 57 de 57 muestras).",
-      "Las tres preguntas para el humano parten de las lecturas erroneas anteriores (exp 1 y exp 4) o ya estaban respondidas por la ronda 1 (exp 2)."
+      "Cronologia: 11 eventos fuera de orden (exp 2 del 17 antes del exp 4 del 16), solo de las rondas 0 y sin la primera destruccion del exp 4 (21:47:21Z). Se reemplazo por la cronologia reconstruida de los JSON (seccion 10 del informe).",
+      "Severidad alta del exp 4: los datos son sinteticos, el RPO fue 0 y la copia aislada resistio el borrado (403); el riesgo residual es de disponibilidad, no de perdida.",
+      "Las tres preguntas para el humano son genericas y ya estan respondidas por las rondas 1 de cada experimento."
     ],
-    "error_propio_detectado": "La primera corrida recibio el experimento 2 sin mediciones por un error de extraccion en hallazgos.js (el resumen esta en resumen.tecnicas). Lo revelo el contraste; se corrigio y se repitio la corrida.",
+    "comparacion_con_la_corrida_anterior": "La corrida anterior del 2026-11-17 incluia un experimento 3 que no forma parte de la version de 2 personas; se repitio solo con los experimentos 1, 2 y 4. Ya no inventa \"problemas de autenticacion\" ni \"problemas de retencion\", pero aparece una exageracion nueva (exfiltracion). Misma conclusion: la propuesta sirve para agrupar, no para diagnosticar.",
     "preparado_por": "Claude (asistente), contra la telemetria real, 2026-11-17",
     "revisado_por": null,
     "revisado_en": null,
     "pendiente": "Leonardo debe revisar y firmar (revisado_por, revisado_en). La decision sobre cada punto es humana."
-  },
-  "entrada": "chaos/security/results/hallazgos-grupo.json (experimentos 1 y 4 de MedicalDevops, 2 de Api_Pet_Adoption, 3 de clic_kiusys)"
+  }
 }

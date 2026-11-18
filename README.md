@@ -591,13 +591,13 @@ Cada compañero recibió una guía (fuera del repositorio) que detalla contrato,
 
 1. Prerrequisitos una sola vez: secreto `medical-api-chaos-token` (hecho el 2026-11-16), permisos `secretAccessor` para `medical-api-gsa` y el principal de Workload Identity sobre ese secreto y sobre `otel-endpoint` / `otel-headers` (hechos), secreto `CHAOS_TOKEN` en GitHub con el mismo valor (hecho).
 2. `deploy-gke.yml` con `ref=v5.0.0` y `resilience_enabled=false` para la ronda 0; prueba de humo automática.
-3. `chaos-gate.yml` con `ronda=0` y `ventana_autorizada=true` (rojo esperado), luego `deploy-gke.yml` con `resilience_enabled=true` y `chaos-gate.yml` con `ronda=1` (verde esperado).
+3. `chaos-gate.yml` con `modo=estado-estable` (linea base sin fallo, mismo perfil de k6), luego `modo=experimento`, `ronda=0` y `ventana_autorizada=true` (rojo esperado); cambio a ronda 1 con `kubectl patch configmap medical-api-config -p '{"data":{"RESILIENCE_ENABLED":"true"}}'` y `kubectl rollout restart deployment/medical-documents-api` (o `deploy-gke.yml` con `resilience_enabled=true`), y `chaos-gate.yml` con `ronda=1` (verde esperado).
 4. `terraform apply` (por el workflow `terraform-gcp.yaml` al fusionar en `main`) crea el tablero y la alerta; antes, importar el secreto ya existente (ver `terraform/README.md`).
 5. Importar `chaos/grafana/dashboard-caos.json` en Grafana Cloud.
 
 ## Seguridad: game day de Ingenieria del Caos (defensa en profundidad)
 
-Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Caos de Seguridad: en lugar de medir la velocidad del sistema se mide la eficacia de sus controles (MTTD, MTTC, cobertura de deteccion, falsos positivos y, en los datos, RPO y RTO). Es un entregable independiente del de rendimiento. El detalle esta en `chaos/security/README.md` y el informe en `docs/chaos/INFORME_GAMEDAY.md`.
+Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Caos de Seguridad: en lugar de medir la velocidad del sistema se mide la eficacia de sus controles (MTTD, MTTC, cobertura de deteccion, falsos positivos y, en los datos, RPO y RTO). Es un entregable independiente del de rendimiento y lo hace un grupo de 2 personas (Leonardo y Angel) con la **version reducida** de la rubrica: experimento 1 (obligatorio), experimento 2 y la version minima del experimento 4; la trazabilidad se reporta frente a ISO/IEC 27001:2022 Anexo A y MITRE ATT&CK/D3FEND. La API de vuelos sigue en el flujo, pero no forma parte de este game day. El detalle esta en `chaos/security/README.md` y el informe en `docs/chaos/INFORME_GAMEDAY.md`.
 
 ### Reparto de experimentos
 
@@ -605,15 +605,14 @@ Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Cao
 |---|---|---|---|---|
 | 1 | Identidad de maquina del coordinador (credencial usada desde un origen no previsto) | Identidad | Leonardo | este repo |
 | 2 | Exposicion y segmentacion (regla permisiva, salto este-oeste) | Red | Angel (AWS) | su repo |
-| 3 | Telemetria y capa de IA (exportador detenido, inyeccion de instrucciones) | Deteccion / IA | Juan (API de vuelos) | su repo |
-| 4 | Resiliencia de los datos del flujo (borrado, RPO/RTO) | Datos | grupal, GCP | este repo |
+| 4 | Resiliencia de los datos del flujo (borrado, RPO/RTO; version minima mas extras) | Datos | grupal, GCP | este repo |
 
 ### Lo implementado en esta API
 
 - **Identidad (experimento 1).** El token del interruptor de caos pasa de un secreto estatico (ronda 0) a tokens efimeros firmados con audiencia y TTL de 15 minutos, con el secreto estatico rechazado en la red (`src/chaos/token.js`, `CHAOS_TOKEN_MODE`). Ventana de ejecucion opcional (`CHAOS_WINDOW`). Honeytoken (`medical-api-admin-backup-key`) que alerta al ser leido. Cada decision de acceso se registra para la deteccion.
 - **Datos (experimento 4).** Cada ejecucion del flujo se archiva como `flujo/<traceId>.json` en el bucket de resultados (`src/v5/archivo.js`). La ronda 1 añade copia aislada en otra region con IAM separado, retencion (WORM) y minimo privilegio del coordinador (solo crea objetos). Scripts en `chaos/security/exp4-datos/`.
 - **Deteccion como codigo.** Seis reglas en `chaos/security/detecciones/*.json` (filtro de Cloud Logging + casos positivos y negativos), publicadas por Terraform (`terraform/seguridad.tf`) como metricas y alertas de Cloud Monitoring. `chaos/security/detecciones/evaluar.js` comprueba que cada regla dispara con el ataque y calla con el trafico normal.
-- **IA en la defensa.** `chaos/security/ia/analizar.js` correlaciona los hallazgos con un modelo (OpenAI o Anthropic), con humano en el bucle; `chaos/security/ia/prueba-inyeccion.js` inyecta instrucciones en datos que la IA ingiere y verifica que las reporte en vez de ejecutarlas (OWASP LLM01 / ATLAS AML.T0051).
+- **IA en la defensa.** `chaos/security/ia/analizar.js` correlaciona los hallazgos con un modelo (OpenAI o Anthropic), con humano en el bucle; `chaos/security/ia/prueba-inyeccion.js` inyecta instrucciones en datos que la IA ingiere y verifica que las reporte en vez de ejecutarlas (OWASP LLM01).
 - **Contencion con aprobacion humana.** `.github/workflows/security-remediate.yml` rota el token del interruptor tras la aprobacion de un revisor (environment `produccion-seguridad`).
 - **Alerta por ausencia de senal.** Latido de telemetria de la API; si deja de escribir bitacora, se alerta.
 
@@ -654,13 +653,6 @@ flowchart TB
     EB["CloudTrail -> EventBridge -> Lambda de contencion -> SNS"]
   end
 
-  subgraph RW["Frontera de confianza API de vuelos (Juan, Railway)"]
-    direction TB
-    Vuelos["API de vuelos"]
-    Lat["Latido y alerta por ausencia de senal"]
-    Sen["Senuelo /internal/senuelo"]
-  end
-
   Internet -->|"X-Trace-Id"| Coord
   Internet -.->|"INYECCION exp 1: credencial desde origen no previsto"| Chaos
   Tok --> Chaos
@@ -670,8 +662,6 @@ flowchart TB
   Internet -.->|"INYECCION exp 4: borrado / sobrescritura"| Bkt
   Coord -->|"1. animal + X-Trace-Id"| ALB --> ECS --> RDS
   Internet -.->|"INYECCION exp 2: regla 0.0.0.0/0 en ECS o RDS"| ECS
-  Coord -->|"2. vuelo + X-Trace-Id"| Vuelos
-  Vuelos -.->|"INYECCION exp 3: telemetria pausada, instruccion en un dato"| Lat
   Chaos -->|"telemetria"| Log
   Honey -->|"telemetria"| Audit
   Bkt -->|"telemetria"| Audit
@@ -681,11 +671,13 @@ flowchart TB
   ECS -->|"telemetria"| EB
 ```
 
+- **Alcance:** solo las fronteras de los dos integrantes del game day (GCP y AWS). El coordinador tambien
+  llama a la API de vuelos (flujo de DevOps), que queda fuera del radio de impacto de estos experimentos.
 - **Fronteras de confianza:** cada nube es una frontera; entre ellas solo viaja HTTP con `X-Trace-Id`.
   Dentro de GCP, la identidad de los pods (Workload Identity) es distinta de la del CI y de la del dueno.
 - **Puntos de inyeccion:** las flechas punteadas "INYECCION". Cada una corresponde a un experimento.
-- **Recoleccion de telemetria:** Cloud Audit Logs y Cloud Logging en GCP, CloudTrail y CloudWatch en AWS,
-  la bitacora del proceso en la API de vuelos. Todas llevan el trace id cuando la peticion pasa por el flujo.
+- **Recoleccion de telemetria:** Cloud Audit Logs y Cloud Logging en GCP, CloudTrail y CloudWatch en AWS.
+  Todas llevan el trace id cuando la peticion pasa por el flujo.
 
 ### Resultados medidos (rondas 0 y 1)
 
@@ -696,23 +688,21 @@ flowchart TB
 | 2 red (AWS) | MTTD ECS / RDS | no detectada en 600 s | 13,0 s / 14,2 s |
 | 2 red (AWS) | MTTC ECS / RDS | no contenida | 21,1 s / 13,1 s |
 | 2 red (AWS) | cobertura / contencion | 0/3 / 0/3 | 2/3 / 3/3 |
-| 3 telemetria (API de vuelos) | MTTD de la ausencia de latido | sin deteccion en 4 s | 3,06 s (T1 era 3 s) |
-| 3 telemetria (API de vuelos) | MTTC | no aplica | 0,01 s |
 | 4 datos (GCP) | RPO / RTO | 0 / 305 s (versiones) | 0 / 20 s (copia aislada) |
 | 4 datos (GCP) | destruccion de la copia / restauracion parcial | n/a | bloqueada (403) / 3 de 3 en 56,5 s |
-| IA | inyecciones ejecutadas / reportadas | n/a | 0 / 3 (y el texto real de los datos de Juan, reportado) |
+| IA | inyecciones ejecutadas / reportadas | n/a | 0 / 3 |
 
-Falsos positivos en trafico normal: 0 en los cuatro. Evidencia: `chaos/security/results/` (exp 1, 4, IA),
-`Api_Pet_Adoption/chaos/security/results/` (exp 2) y `clic_kiusys/chaos/security/results/` (exp 3).
+Falsos positivos en trafico normal: 0 en los tres. Evidencia: `chaos/security/results/` (exp 1, 4, IA) y
+`Api_Pet_Adoption/chaos/security/results/` (exp 2).
 
 ### Trazabilidad a marcos de referencia
 
-MITRE ATT&CK (tecnica emulada) y D3FEND (contramedida) en cada regla de `chaos/security/detecciones/`; MITRE ATLAS y OWASP LLM/Agentic 2026 en la capa de IA; ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207 (verificacion continua, minimo privilegio, microsegmentacion) en la tabla completa del informe (`docs/chaos/INFORME_GAMEDAY.md`, seccion 11).
+Version de 2 personas: MITRE ATT&CK (tecnica emulada) y D3FEND (contramedida) en cada regla de `chaos/security/detecciones/`, e ISO/IEC 27001:2022 Anexo A por control en la tabla del informe (`docs/chaos/INFORME_GAMEDAY.md`, seccion 10). En la capa de IA se cita ademas OWASP LLM01.
 
 ### Estado de los compañeros
 
-Los experimentos 2 (Angel) y 3 (Juan) estan ejecutados y documentados en sus repositorios, y sus resultados
-estan integrados en el informe del grupo. Lo pendiente esta en `docs/chaos/INFORME_GAMEDAY.md`, seccion 12.
+El experimento 2 (Angel) esta ejecutado y documentado en su repositorio, y sus resultados estan integrados
+en el informe del grupo. Lo pendiente esta en `docs/chaos/INFORME_GAMEDAY.md`, seccion 11.
 
 ## Cómo correr en local
 
