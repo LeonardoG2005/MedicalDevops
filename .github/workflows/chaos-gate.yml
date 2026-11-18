@@ -96,6 +96,10 @@ jobs:
       # Validation before touching anything: the experiment file and the k6
       # script must be well formed, and the coordinator must be reachable
       - name: Validar experimento, carga y verificar la ronda desplegada
+        # chaos validate resolves the experiment's secrets block, so the
+        # token must be present even though nothing is called here
+        env:
+          CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
         run: |
           chaos validate chaos/experiments/latencia-salida-angel.json
           k6 inspect chaos/k6/flujo.js >/dev/null
