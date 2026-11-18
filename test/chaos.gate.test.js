@@ -65,3 +65,25 @@ test('Gate: un rollback fallido o un experimento interrumpido rechazan', () => {
   assert.ok(rollback.razones.some((r) => r.includes('Rollback fallido: revertir-la-latencia')));
   assert.ok(interrumpido.razones.some((r) => r.includes('"interrupted"')));
 });
+
+test('Gate: la linea base (estado estable) aprueba sin diario de Chaos Toolkit', () => {
+  const resultado = decide({ summary: resumen({ p95: 300 }), journal: null, slo, requiereJournal: false });
+
+  assert.equal(resultado.veredicto, 'APROBADO');
+  assert.equal(resultado.chaos_toolkit, null);
+  assert.match(renderMarkdown(resultado, 'estable'), /Linea base sin fallo/);
+});
+
+test('Gate: la linea base sigue rechazando si el sistema sin fallo no cumple el SLO', () => {
+  const resultado = decide({ summary: resumen({ p95: 2500 }), journal: null, slo, requiereJournal: false });
+
+  assert.equal(resultado.veredicto, 'RECHAZADO');
+  assert.ok(resultado.razones.some((razon) => razon.includes('p95')));
+});
+
+test('Gate: en un experimento el diario sigue siendo obligatorio', () => {
+  const resultado = decide({ summary: resumen(), journal: null, slo });
+
+  assert.equal(resultado.veredicto, 'RECHAZADO');
+  assert.ok(resultado.razones.some((razon) => razon.includes('diario')));
+});
