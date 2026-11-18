@@ -5,6 +5,7 @@
 // decide() es pura y se prueba sola; main() solo lee archivos e imprime.
 //
 //   node chaos/gate.js --k6 chaos/results/k6-ronda-0.json --journal chaos/results/journal-ronda-0.json [--slo chaos/slo.json]
+//   node chaos/gate.js --modo estado-estable   (linea base: solo k6, sin fallo ni diario)
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -68,7 +69,9 @@ function resumirJournal(journal) {
 // rompio, la metrica objetivo y la de guarda cumplen el SLO, y el diario de
 // Chaos Toolkit no registra desviacion ni rollbacks fallidos. Cualquier dato
 // ausente cuenta como fallo: la puerta nunca aprueba por falta de evidencia.
-function decide({ summary, journal, slo }) {
+// En la linea base (estado estable) no hay experimento, asi que el diario no
+// se exige: solo se mide la carga sin fallo contra el mismo SLO.
+function decide({ summary, journal, slo, requiereJournal = true }) {
   const razones = [];
   const k6 = summary ? resumirK6(summary) : null;
   const ctk = resumirJournal(journal);
@@ -85,7 +88,7 @@ function decide({ summary, journal, slo }) {
   }
 
   if (!ctk) {
-    razones.push('No existe el diario de Chaos Toolkit: el experimento no se ejecuto');
+    if (requiereJournal) razones.push('No existe el diario de Chaos Toolkit: el experimento no se ejecuto');
   } else {
     if (ctk.status !== 'completed') razones.push(`El experimento termino con estado "${ctk.status}"`);
     if (ctk.deviated) razones.push('Chaos Toolkit marco el experimento como desviado: la hipotesis se refuto');
@@ -110,7 +113,9 @@ function renderMarkdown(resultado, ronda) {
   const k6 = resultado.k6 || {};
   const ctk = resultado.chaos_toolkit || {};
   const lineas = [
-    `### Chaos gate (ronda ${ronda ?? '?'}): ${resultado.veredicto}`,
+    ronda === 'estable'
+      ? `### Linea base sin fallo (estado estable): ${resultado.veredicto}`
+      : `### Chaos gate (ronda ${ronda ?? '?'}): ${resultado.veredicto}`,
     '',
     '| Metrica | Valor | Umbral |',
     '|---|---|---|',
@@ -121,9 +126,11 @@ function renderMarkdown(resultado, ronda) {
     `| Circuito abierto | ${fmt(k6.circuito_abierto_rate === null ? null : k6.circuito_abierto_rate * 100, 2, ' %')} | informativo |`,
     `| p95 dependencia Angel | ${fmt(k6.angel_p95_ms, 0, ' ms')} | informativo |`,
     `| Peticiones | ${fmt(k6.peticiones)} | >= ${resultado.slo.peticiones_minimas} |`,
-    `| Chaos Toolkit | ${ctk.status ?? 'n/d'}${ctk.deviated ? ' (desviado)' : ''} | completed, no desviado |`,
-    '',
   ];
+  if (resultado.chaos_toolkit || ronda !== 'estable') {
+    lineas.push(`| Chaos Toolkit | ${ctk.status ?? 'n/d'}${ctk.deviated ? ' (desviado)' : ''} | completed, no desviado |`);
+  }
+  lineas.push('');
   if (resultado.razones.length) {
     lineas.push('Motivos:');
     for (const razon of resultado.razones) lineas.push(`- ${razon}`);
@@ -134,11 +141,12 @@ function renderMarkdown(resultado, ronda) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const ronda = args.ronda || process.env.RONDA;
+  const estable = args.modo === 'estado-estable';
+  const ronda = estable ? 'estable' : args.ronda || process.env.RONDA;
   const k6File = args.k6 || (ronda !== undefined ? `chaos/results/k6-ronda-${ronda}.json` : null);
-  const journalFile = args.journal || (ronda !== undefined ? `chaos/results/journal-ronda-${ronda}.json` : null);
+  const journalFile = estable ? null : args.journal || (ronda !== undefined ? `chaos/results/journal-ronda-${ronda}.json` : null);
   const slo = leerJson(args.slo || path.join(__dirname, 'slo.json'));
-  const resultado = decide({ summary: leerJson(k6File), journal: leerJson(journalFile), slo });
+  const resultado = decide({ summary: leerJson(k6File), journal: leerJson(journalFile), slo, requiereJournal: !estable });
   const markdown = renderMarkdown(resultado, ronda);
   console.log(markdown);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);

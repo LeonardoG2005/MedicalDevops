@@ -133,8 +133,12 @@ jobs:
         env:
           IMAGE: ${{ needs.image.outputs.image }}
         run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl set image deployment/$DEPLOYMENT -n $NAMESPACE medical-documents-api="$IMAGE"
+          # The manifest only carries a placeholder tag; the digest goes into the
+          # manifest before applying, so no ReplicaSet ever points at a tag that
+          # does not exist in Artifact Registry
+          sed "s#image: .*/medical-documents-api:.*#image: $IMAGE#" k8s/deployment.yaml > /tmp/deployment.yaml
+          grep -q "image: $IMAGE" /tmp/deployment.yaml
+          kubectl apply -f /tmp/deployment.yaml
           # A ConfigMap change alone does not restart pods; the annotation forces
           # a rollout even when the image did not change (round switch)
           kubectl patch deployment $DEPLOYMENT -n $NAMESPACE -p \

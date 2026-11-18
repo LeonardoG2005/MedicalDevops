@@ -5,6 +5,9 @@ name: Chaos gate - Experimento de latencia
 # (chaos/k6/flujo.js) contra el coordinador en GKE y falla si la metrica
 # objetivo (p95 del flujo) no cumple el umbral de chaos/slo.json.
 #
+# Modo estado-estable: la misma carga sin fallo, para medir la linea base en
+# la nube con el mismo perfil (no ejecuta Chaos Toolkit ni inyecta nada).
+#
 # Solo manual y solo dentro de una ventana acordada: nunca corre en push.
 # El fallo inyectado siempre se revierte (rollback-strategy=always, paso
 # "Reversion explicita" con if: always() y, como ultima red, el TTL del fallo).
@@ -17,6 +20,11 @@ on:
         description: "Confirmo que estamos en la ventana acordada con el grupo y que la infraestructura es nuestra"
         type: boolean
         default: false
+      modo:
+        description: "experimento = fallo + puerta; estado-estable = la misma carga sin fallo (linea base)"
+        type: choice
+        options: ["experimento", "estado-estable"]
+        default: "experimento"
       ronda:
         description: "Ronda a medir (debe coincidir con RESILIENCE_ENABLED desplegado: 0=false, 1=true)"
         type: choice
@@ -51,10 +59,16 @@ env:
   LATENCIA_MS: ${{ inputs.latencia_ms }}
   PERFIL: ${{ inputs.perfil }}
   RESULTS_DIR: chaos/results
+  MODO: ${{ inputs.modo }}
+  # The coordinator runs in ephemeral token mode since the identity
+  # experiment: probes.js mints a short lived token bound to this audience
+  # from CHAOS_TOKEN instead of sending the shared secret on the wire
+  CHAOS_TOKEN_MODE: efimero
+  CHAOS_AUDIENCE: chaos-gate
 
 jobs:
   experimento:
-    name: Experimento y puerta de calidad (ronda ${{ inputs.ronda }})
+    name: ${{ inputs.modo == 'estado-estable' && 'Linea base sin fallo' || 'Experimento y puerta de calidad' }} (ronda ${{ inputs.ronda }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -90,7 +104,20 @@ jobs:
           grep -i "^x-ronda" /tmp/h.txt
           grep -qi "^x-ronda: $RONDA" /tmp/h.txt || { echo "::error::El coordinador esta en otra ronda (ver X-Ronda). Despliegue con RESILIENCE_ENABLED correcto."; exit 1; }
 
+      - name: Medir la linea base (sin fallo)
+        if: ${{ inputs.modo == 'estado-estable' }}
+        env:
+          CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
+        run: |
+          test -n "$CHAOS_TOKEN"
+          mkdir -p "$RESULTS_DIR"
+          node chaos/probes.js sin-fallos
+          k6 run --quiet chaos/k6/flujo.js \
+            -e BASE_URL="$CHAOS_BASE_URL" -e IMAGEN_ID="$IMAGEN_ID" \
+            -e RONDA=estable -e PERFIL="$PERFIL" -e RESULTS_DIR="$RESULTS_DIR"
+
       - name: Ejecutar el experimento de caos
+        if: ${{ inputs.modo == 'experimento' }}
         env:
           CHAOS_TOKEN: ${{ secrets.CHAOS_TOKEN }}
         run: |
@@ -112,12 +139,17 @@ jobs:
 
       - name: Puerta de calidad
         if: always()
-        run: node chaos/gate.js --ronda "$RONDA" --out "$RESULTS_DIR/gate-ronda-$RONDA.json"
+        run: |
+          if [ "$MODO" = "estado-estable" ]; then
+            node chaos/gate.js --modo estado-estable --out "$RESULTS_DIR/gate-ronda-estable.json"
+          else
+            node chaos/gate.js --ronda "$RONDA" --out "$RESULTS_DIR/gate-ronda-$RONDA.json"
+          fi
 
       - name: Guardar evidencia
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: chaos-ronda-${{ inputs.ronda }}-${{ github.run_number }}
+          name: chaos-${{ inputs.modo == 'estado-estable' && 'estable' || format('ronda-{0}', inputs.ronda) }}-${{ github.run_number }}
           path: chaos/results/*.json
           if-no-files-found: warn

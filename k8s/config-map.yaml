@@ -25,7 +25,9 @@ data:
   # (only short lived tokens bound to CHAOS_AUDIENCE; the secret is rejected on
   # the wire). CHAOS_WINDOW limits every call to the agreed window, e.g.
   # "2026-11-18T08:00:00-05:00/2026-11-18T12:00:00-05:00"; empty = no window.
-  CHAOS_TOKEN_MODE: "estatico"
+  # Default since the identity experiment closed: "efimero" (hardened state).
+  # Round 0 of that experiment patches it to "estatico" by hand for the window.
+  CHAOS_TOKEN_MODE: "efimero"
   CHAOS_AUDIENCE: "chaos-gate"
   CHAOS_WINDOW: ""
   # Each flow execution is archived as flujo/<traceId>.json (group experiment 4)
