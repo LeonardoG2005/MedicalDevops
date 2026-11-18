@@ -128,9 +128,14 @@ async function buildApp(options = {}) {
   const faults = createFaultCache({
     repository: chaosRepository,
     ttlMs: options.chaos?.cacheTtlMs ?? 3000,
+    // Background refresh so idle pods drop a removed fault from their gauge.
+    // Opt in through CHAOS_CACHE_REFRESH_MS (set in the ConfigMap); off by
+    // default so short lived processes (tests, scripts) can exit
+    refreshEveryMs: options.chaos?.refreshEveryMs ?? Number(process.env.CHAOS_CACHE_REFRESH_MS || 0),
     metrics,
     log: app.log,
   });
+  app.addHook('onClose', async () => faults.stop());
   const caller = createDependencyCaller({ ...resilienceConfig(options.resilience), metrics });
   const archivo = options.flowArchive || createFlowArchive({ log: app.log });
   await app.register(v5Routes, { caller, faults, metrics, archivo });

@@ -79,6 +79,8 @@ jobs:
           test/v5.flujo.test.js
           test/v5.resilience.test.js
           test/chaos.switch.test.js
+          test/chaos.cache.test.js
+          test/metrics.buckets.test.js
           test/chaos.gate.test.js
           test/chaos.token.test.js
           test/v5.archivo.test.js

@@ -537,16 +537,17 @@ Tabla `chaos_faults` (una fila por compañero: `latency_ms`, `error_rate`, `expi
 
 Las dos rondas corren el **mismo** experimento, carga, fallo, duración e instrumento; solo cambia `RESILIENCE_ENABLED` en el ConfigMap (`false` = ronda 0, `true` = ronda 1), que el workflow `deploy-gke.yml` ajusta y la cabecera `X-Ronda` confirma. En ronda 0 el coordinador hace la llamada sin protección: la latencia se suma entera y, si una dependencia falla, el flujo responde 502 sin llamar a la siguiente (fallo en cascada). En ronda 1 cada dependencia tiene timeout de 2 s, un circuit breaker por compañero (abre tras 5 llamadas con más del 50 % de fallos, prueba de nuevo a los 10 s) y el flujo completa la cadena devolviendo 200 con `degradado: true`. No hay reintentos: contra una latencia, reintentar duplica la presión sobre el compañero lento y la latencia propia.
 
-Resultado de las rondas locales del 2026-11-16 (dobles de los compañeros, mismo código):
+Resultado de las rondas sobre la nube del 2026-11-18 (GKE, las tres APIs en línea, ejecutadas desde `chaos-gate.yml`):
 
-| Métrica | Ronda 0 | Ronda 1 | Variación |
+| Métrica | Estado estable | Ronda 0 | Ronda 1 |
 |---|---|---|---|
-| p95 del flujo | 3046 ms | 12 ms | -99.6 % |
-| Tasa de error | 0 % | 0 % | sin cambio |
-| Respuestas degradadas | 0 % | 100 % | respuesta parcial en vez de espera |
-| Hipótesis | refutada | se mantiene | |
+| p95 del flujo (k6) | 272 ms | 3150 ms | 193 ms |
+| Tasa de error | 0,01 % | 0 % | 0 % |
+| Peticiones en 5 min | 19 392 | 865 | 24 380 |
+| Respuestas degradadas | 0 % | 0 % | 100 % |
+| Hipótesis / puerta | APROBADO | refutada / RECHAZADO | se mantiene / APROBADO |
 
-La evidencia de estas rondas está en `chaos/results/` (resúmenes de k6, diarios de Chaos Toolkit y veredictos de la puerta). Las rondas sobre la nube quedan pendientes hasta que la API de Juan vuelva a estar en línea; la de Angel ya responde desde el 2026-11-16 (`docs/chaos/INFORME_EXPERIMENTO.md`).
+Runs: [estado estable](https://github.com/LeonardoG2005/MedicalDevops/actions/runs/44241619755), [ronda 0](https://github.com/LeonardoG2005/MedicalDevops/actions/runs/44242633122), [ronda 1](https://github.com/LeonardoG2005/MedicalDevops/actions/runs/44244223691). La evidencia está en `chaos/results/nube/` y el análisis completo, con capturas del tablero y de Tempo, en `docs/chaos/INFORME_EXPERIMENTO.md`. El ensayo local previo con dobles (ronda 0 p95 3046 ms, ronda 1 p95 12 ms) está en `chaos/results/`.
 
 ### Observabilidad
 

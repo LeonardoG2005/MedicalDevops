@@ -49,7 +49,13 @@ function createChaosRepository({ query = defaultQuery } = {}) {
 // costs the flow nothing. If the database cannot be read three times in a
 // row the cache falls back to "no faults": a DB hiccup must never leave an
 // injected fault stuck on.
-function createFaultCache({ repository, ttlMs = 3000, metrics, log, maxFailures = 3 } = {}) {
+//
+// Besides the lazy refresh, a timer refreshes every refreshEveryMs. Without
+// it a pod that stops receiving traffic keeps its last snapshot, so its
+// chaos_fault_active gauge stays at 1 after the fault was removed (found in
+// the cloud rounds of 2026-11-17: the forgotten-fault alert fired with an
+// empty table). The timer is unref'd so it never keeps the process alive.
+function createFaultCache({ repository, ttlMs = 3000, refreshEveryMs = 0, metrics, log, maxFailures = 3 } = {}) {
   const empty = () => Object.fromEntries(PEERS.map((peer) => [peer, null]));
   let snapshot = empty();
   let fetchedAt = 0;
@@ -86,9 +92,7 @@ function createFaultCache({ repository, ttlMs = 3000, metrics, log, maxFailures 
       await refresh();
       return snapshot;
     }
-    if (Date.now() - fetchedAt > ttlMs && !inflight) {
-      inflight = refresh().finally(() => { inflight = null; });
-    }
+    if (Date.now() - fetchedAt > ttlMs) refreshInBackground();
     return snapshot;
   }
 
@@ -98,7 +102,23 @@ function createFaultCache({ repository, ttlMs = 3000, metrics, log, maxFailures 
     fetchedAt = 0;
   }
 
-  return { get, refresh, invalidate, ttlMs };
+  function refreshInBackground() {
+    if (!inflight) inflight = refresh().finally(() => { inflight = null; });
+    return inflight;
+  }
+
+  let timer = null;
+  if (refreshEveryMs > 0) {
+    timer = setInterval(refreshInBackground, refreshEveryMs);
+    timer.unref?.();
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  return { get, refresh, invalidate, stop, ttlMs };
 }
 
 module.exports = { createChaosRepository, createFaultCache, PEERS };

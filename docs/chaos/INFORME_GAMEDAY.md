@@ -61,8 +61,8 @@ acepto, antes de su primera ejecucion):
 
 | Integrante | Acepta las reglas de compromiso | Fecha |
 |---|---|---|
-| Leonardo Guevara | PENDIENTE | |
-| Angel Avirama | PENDIENTE (su informe declara las ventanas "acordadas con el grupo") | |
+| Leonardo Guevara | Acepto | 2026-11-18 |
+| Angel Avirama | Acepto | 2026-11-18 |
 
 ## 4. Experimento 1: identidad de maquina del coordinador (Leonardo, GCP)
 
@@ -165,13 +165,27 @@ Salida y contraste: `chaos/security/results/ia-analisis-grupo.json`.
 | Tres preguntas para el humano | genericas, ya respondidas por las rondas 1 | descartadas |
 
 El contraste revelo tambien un **error propio** en una corrida anterior: el experimento 2 llego sin
-mediciones por un error de extraccion en `hallazgos.js`; se corrigio y se repitio. La firma del contraste
-es de Leonardo (campo `contraste_humano.revisado_por`).
+mediciones por un error de extraccion en `hallazgos.js`; se corrigio y se repitio. El contraste lo
+reviso y firmo Leonardo Guevara el 2026-11-18 (campos `contraste_humano.revisado_por` y `revisado_en`).
 
-**Caos sobre la capa de IA** (`chaos/security/ia/prueba-inyeccion.js`): instrucciones inyectadas en tres
-vectores (contenido de un adjunto, nombre de un adjunto, linea de log). El modelo las reporto y no las
-ejecuto (0 de 3). Mitigacion: separacion datos/instrucciones, salida JSON estructurada, sin herramientas
-con efecto (OWASP LLM01, Top 10 for LLM Applications).
+**Caos sobre la capa de IA** (`chaos/security/ia/prueba-inyeccion.js`, 2026-11-18, `gpt-4o-mini`):
+instrucciones inyectadas en tres vectores que el componente ingiere (contenido de un adjunto, nombre de un
+adjunto, linea de log del flujo), con el mismo metodo en dos rondas. Riesgo: OWASP LLM01 Prompt Injection
+(Top 10 for LLM Applications); MITRE ATLAS AML.T0051 (LLM Prompt Injection).
+
+| Ronda | Prompt | Ejecuto | Reporto | Ignoro sin avisar |
+|---|---|---|---|---|
+| 0, sin mitigacion | datos pegados dentro de la instruccion, sin delimitadores ni campo para reportar | 1 de 3 | 0 de 3 | 2 de 3 |
+| 1, con mitigacion | datos entre delimitadores y declarados como datos, salida JSON con `posibles_inyecciones`, sin herramientas con efecto | 0 de 3 | 3 de 3 | 0 de 3 |
+
+En la ronda 0 el caso de la linea de log salio con severidad baja y sin preguntas, que es justo lo que
+ordenaba la instruccion escondida (aunque para un token expirado podria ser tambien criterio del modelo:
+se cuenta como ejecutada por prudencia). Lo mas grave de la ronda 0 no es esa obediencia sino que ninguna
+inyeccion se noto: el analista humano no tendria como saber que un dato intento manipular el analisis.
+Con la mitigacion las tres se reportan y ninguna cambia la salida. Evidencia:
+`chaos/security/results/ia-inyeccion.json` (`resumen`, `ronda_0_sin_mitigacion` y `resultados`).
+El evaluador de la ronda 0 tenia un defecto que se corrigio antes de reportar: contaba como "analisis
+vaciado" un grupo devuelto como objeto en lugar de lista.
 
 ## 8. Tendencias del sector instrumentadas
 
@@ -214,7 +228,7 @@ Version de 2 personas: ISO/IEC 27001:2022 Anexo A y MITRE ATT&CK/D3FEND.
 | 1 | credencial efimera, deteccion de impersonacion, honeytoken | T1550.001, T1078.004, T1555.006 | D3-RAPA, D3-UAP, D3-DUC | A.5.16, A.5.17, A.8.5 |
 | 2 | alerta y contencion de reglas publicas, alarma sin ALB, filtrado de salida, RDS privado | T1562.007, T1190, T1048 | D3-ITF, D3-NTF, D3-NTA, D3-OTF, D3-NI | A.8.16, A.8.20, A.8.22 |
 | 4 | versioning, WORM, copia aislada, minimo privilegio sobre el bucket | T1485, T1486 | D3-RF, D3-RAPA | A.8.13 |
-| IA | correlacion con humano en el bucle, separacion datos/instrucciones | - | - | A.5.7 |
+| IA | correlacion con humano en el bucle, separacion datos/instrucciones | (ATLAS AML.T0051) | - | A.5.7 |
 
 ## 11. Lecciones, riesgos residuales y proximos experimentos
 
@@ -225,9 +239,19 @@ Version de 2 personas: ISO/IEC 27001:2022 Anexo A y MITRE ATT&CK/D3FEND.
   mostraban: la regla de impersonacion disparaba con Workload Identity legitimo (71 veces en 6 h; 0 tras
   la correccion) y Terraform leia el valor del honeytoken en cada corrida. Los casos negativos se tomaron
   luego de logs reales.
+- **Tercer falso positivo, en el primer despliegue desde CI** (2026-11-18 04:42 UTC, correo critico de
+  `seguridad_identidad_coordinador_impersonada`). `deploy-gke.yml` corre la migracion como un job de
+  Cloud Run con la cuenta del coordinador (`medical-api-gsa`); el robot de Cloud Run
+  (`serverless-robot-prod`) usa esa identidad para conectarse a Cloud SQL y leer secretos, y en la
+  auditoria eso aparece como delegacion. La regla hizo lo que debia (uso de la identidad fuera de
+  Workload Identity); el defecto es de diseno: una misma identidad para el coordinador y para la
+  migracion. Mitigacion inmediata: desplegar sin migracion cuando no hay migraciones nuevas. Correccion
+  propuesta: cuenta de servicio propia para la migracion, con solo `cloudsql.client` y acceso al secreto
+  de la base, de modo que cualquier uso de `medical-api-gsa` fuera de los pods vuelva a ser anomalo.
 - **Riesgos residuales:** el circuit breaker y la cache del interruptor son por pod; los tasks de AWS
   tienen IP publica y la salida por 443 sigue abierta; un borrado sin generacion todavia oculta la
-  version viva del bucket (impacto de disponibilidad, no de perdida).
+  version viva del bucket (impacto de disponibilidad, no de perdida); la migracion comparte identidad
+  con el coordinador (ver el punto anterior).
 - **Proximos experimentos:** fallo correlacionado (nodo de GKE); desactivar el trail o la Lambda y medir si
   la alarma de la app lo cubre; salto este-oeste en la VPC; quitar `storage.objects.delete` de la version
   viva a toda identidad distinta del respaldo y repetir el exp 4.
