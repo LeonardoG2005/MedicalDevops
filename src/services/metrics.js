@@ -16,9 +16,12 @@ const NOTE_ROUTES = new Set(['/notas-medicas', '/api/v4/notas-medicas']);
 
 const PEERS = ['angel', 'juan'];
 const FAULT_TYPES = ['latencia', 'error'];
-// Buckets with edges at the timeout (2 s) and at the injected latency (3 s),
-// so both show up as steps on the dependency histogram
-const DEPENDENCY_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10];
+// Latency buckets in seconds, shared by the flow and the dependency
+// histograms (Prometheus and OTel). Dense around the SLO (2 s), the timeout
+// (2 s) and the injected latency (3 s): with the library defaults a 3.1 s p95
+// fell in the 2.5 to 5 s bucket and histogram_quantile reported 4.9 s
+// (cloud rounds of 2026-11-17)
+const LATENCY_BUCKETS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 3.25, 3.5, 4, 5, 7.5, 10];
 const CIRCUIT_STATES = { closed: 0, open: 1, halfOpen: 2 };
 
 // version, track and round travel on every series so the two rounds of the
@@ -39,6 +42,7 @@ const createMetrics = () => {
     name: 'http_request_duration_seconds',
     help: 'HTTP request duration in seconds',
     labelNames: ['method', 'route', 'status_code', 'version', 'track', 'round'],
+    buckets: LATENCY_BUCKETS,
     registers: [registry],
   });
   const notesRegistered = new Counter({
@@ -51,7 +55,7 @@ const createMetrics = () => {
     name: 'dependency_request_duration_seconds',
     help: 'Duration of outgoing calls to the peer APIs, by peer and outcome',
     labelNames: ['peer', 'outcome', 'version', 'track', 'round'],
-    buckets: DEPENDENCY_BUCKETS,
+    buckets: LATENCY_BUCKETS,
     registers: [registry],
   });
   const flowRequests = new Counter({
@@ -148,4 +152,4 @@ const createMetrics = () => {
   };
 };
 
-module.exports = { createMetrics, PEERS, FAULT_TYPES, CIRCUIT_STATES };
+module.exports = { createMetrics, PEERS, FAULT_TYPES, CIRCUIT_STATES, LATENCY_BUCKETS };
