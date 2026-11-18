@@ -12,11 +12,14 @@ reversion probado. No se actua sobre terceros.
 
 ## Reparto de experimentos
 
+Grupo de 2 personas (Leonardo y Angel), version reducida de la rubrica: experimento
+1 (obligatorio), experimento 2 y la version minima del experimento 4 (un bucket,
+RPO y RTO; la copia aislada y la restauracion parcial son extras).
+
 | # | Experimento | Capa | Propietario | Donde |
 |---|---|---|---|---|
 | 1 | Identidad de maquina y de agente del coordinador | Identidad | Leonardo | este repo (`exp1-identidad/`) |
 | 2 | Exposicion y segmentacion | Red | Angel (AWS) | su repo (ver guia) |
-| 3 | Telemetria y capa de IA (exportador detenido, inyeccion) | Deteccion / IA | Juan (OCI) | su repo (ver guia) |
 | 4 | Resiliencia de los datos del flujo (borrado, RPO/RTO) | Datos | grupal, ejecuta Leonardo en GCP | este repo (`exp4-datos/`) |
 
 La defensa con IA (correlacion con humano en el bucle) y el caos sobre la
@@ -38,12 +41,13 @@ Leonardo sobre los hallazgos del game day.
 
 ## Marcos de referencia
 
+Version de 2 personas: la trazabilidad se exige solo a estos marcos.
+
 - Tecnicas emuladas: MITRE ATT&CK (en cada `detecciones/*.json`).
 - Contramedidas: MITRE D3FEND.
-- Capa de IA: MITRE ATLAS y OWASP Top 10 LLM/Agentic 2026.
-- Cumplimiento: ISO/IEC 27001:2022 Anexo A, NIST SP 800-53, NIST SP 800-207
-  (verificacion continua, minimo privilegio, microsegmentacion). Tabla de
-  trazabilidad en el README raiz y en `docs/chaos/INFORME_GAMEDAY.md`.
+- Cumplimiento: ISO/IEC 27001:2022 Anexo A. Tabla de trazabilidad en
+  `docs/chaos/INFORME_GAMEDAY.md`, seccion 10.
+- Capa de IA (complemento): OWASP LLM01.
 
 ## Reglas de compromiso
 
@@ -78,12 +82,14 @@ export CHAOS_BASE_URL=http://34.123.58.136
 export CHAOS_TOKEN=$(gcloud secrets versions access latest --secret=medical-api-chaos-token)
 export SEC_RESULTS_DIR=chaos/security/results
 
-# Ronda 0 (coordinador en CHAOS_TOKEN_MODE=estatico):
+# Ronda 0 (el ConfigMap trae efimero por defecto; para la ventana se vuelve a estatico):
+kubectl patch configmap medical-api-config -p '{"data":{"CHAOS_TOKEN_MODE":"estatico"}}'
+kubectl rollout restart deployment/medical-documents-api
 RONDA=0 node chaos/security/exp1-identidad/ejecutar.js estado-estable
 RONDA=0 node chaos/security/exp1-identidad/ejecutar.js probar --cual todos
 RONDA=0 node chaos/security/exp1-identidad/ejecutar.js medir        # esperar ~90 s de ingesta
 
-# Mejora: desplegar con CHAOS_TOKEN_MODE=efimero (deploy-gke.yml o kubectl patch)
+# Mejora: volver a CHAOS_TOKEN_MODE=efimero (valor por defecto del ConfigMap; deploy-gke.yml o kubectl patch)
 # Ronda 1:
 export CHAOS_TOKEN_MODE=efimero CHAOS_AUDIENCE=chaos-gate
 RONDA=1 node chaos/security/exp1-identidad/ejecutar.js probar --cual todos
