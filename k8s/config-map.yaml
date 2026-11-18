@@ -30,6 +30,9 @@ data:
   CHAOS_TOKEN_MODE: "efimero"
   CHAOS_AUDIENCE: "chaos-gate"
   CHAOS_WINDOW: ""
+  # Each pod rereads the chaos switch every 5 s even without traffic, so an
+  # idle pod never keeps reporting a fault that was already removed
+  CHAOS_CACHE_REFRESH_MS: "5000"
   # Each flow execution is archived as flujo/<traceId>.json (group experiment 4)
   FLOW_ARCHIVE_BUCKET: "medical-devops-400345348270-results"
   # OpenTelemetry: traces and the experiment metrics go to Grafana Cloud over
