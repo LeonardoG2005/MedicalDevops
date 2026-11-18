@@ -459,7 +459,7 @@ flowchart LR
   subgraph AWS["AWS: API de adopción (Angel)"]
     B["GET /api/v2/animals/random"]
   end
-  subgraph OCI["OCI: API de vuelos (Juan)"]
+  subgraph OCI["Railway: API de vuelos (Juan)"]
     A["GET /api/v2/entidades/vuelos/random"]
   end
 
@@ -486,7 +486,7 @@ flowchart LR
 |---|---|---|---|
 | Leonardo | GCP, GKE | Imagen (local) | Coordinador y punto de entrada; Kubernetes; experimento de latencia saliente |
 | Angel | AWS, ECS + ALB | Animal (`/api/v2/animals/random`) | Primera dependencia; experimento de indisponibilidad (5xx sostenidos / caída de task) |
-| Juan | OCI | Vuelo (`/api/v2/entidades/vuelos/random`) | Segunda dependencia; experimento de agotamiento de recursos (pool / concurrencia) |
+| Juan | Railway (antes OCI) | Vuelo (`/api/v2/entidades/vuelos/random`) | Segunda dependencia; experimento de agotamiento de recursos (pool / concurrencia) |
 
 `GET /api/v5/flujo/:imagenId` busca la imagen, llama a Angel, **después** llama a Juan (en cadena, no en paralelo) y responde:
 
@@ -496,7 +496,7 @@ flowchart LR
   "imagen": { "id": 2, "nombre": "rx_caos.jpg" },
   "dependencias": {
     "angel": { "estado": "timeout", "duracion_ms": 2005, "nube": "aws", "entidad": "animal" },
-    "juan":  { "estado": "ok", "duracion_ms": 5, "nube": "oci", "entidad": "vuelo" }
+    "juan":  { "estado": "ok", "duracion_ms": 5, "nube": "railway", "entidad": "vuelo" }
   },
   "animal": null,
   "vuelo": { "id": 50, "numero": "V-050" }
@@ -580,7 +580,7 @@ Cada compañero recibió una guía (fuera del repositorio) que detalla contrato,
 
 ### Limitaciones conocidas y pendientes
 
-- La API de Angel volvió a estar en línea el 2026-11-16 en `http://pet-adoption-demo-alb-66249762.us-east-1.elb.amazonaws.com` (versión 2 del secreto `medical-api-api-c-url`). Verificado desde GKE: `dependencias.angel.estado = "ok"` con el `X-Trace-Id` propagado. La API de Juan no tiene hoy un despliegue público: su clúster OKE se eliminó, la IP de `157-137-193-66.sslip.io` ya sirve otra aplicación (404 en todas las rutas), el balanceador de OCI de su despliegue de octubre (`157.137.198.114`) ya no responde y sus servicios de Render tampoco. Su propio informe declara que su experimento, ya medido con k6, corrió en local. Su código sí cumple el contrato (`/api/v2/entidades/vuelos/random` y eco de `X-Trace-Id`); falta que lo despliegue con su `terraform-oci.yml`. Mientras tanto, en ronda 0 el flujo completo termina en 502 por Juan, y las rondas sobre la nube del experimento de latencia esperan su despliegue.
+- La API de Angel volvió a estar en línea el 2026-11-16 en `http://pet-adoption-demo-alb-66249762.us-east-1.elb.amazonaws.com` (versión 2 del secreto `medical-api-api-c-url`). Verificado desde GKE: `dependencias.angel.estado = "ok"` con el `X-Trace-Id` propagado. La API de Juan está en línea desde el 2026-11-17 en `https://clic-kiusys-vuelos.up.railway.app` (versión 2 del secreto `medical-api-api-a-url`). El flujo de las tres APIs responde 200 de punta a punta con el `X-Trace-Id` propagado (verificado desde GKE). Railway es un proveedor distinto de GCP y AWS, pero no es OCI, la nube declarada para Juan en las entregas anteriores; su `/api/v2/health` todavía reporta `cloud_provider: "oci"`.
 - Los experimentos de Angel y de Leonardo tocan la misma dependencia del flujo (la llamada a la API de adopción). Se ejecutan en ventanas separadas para no contaminar las mediciones (`chaos/README.md`, sección de coordinación).
 - El estado del circuit breaker es por pod (dos réplicas, dos circuitos). Compartirlo exigiría Redis o Memorystore, fuera del alcance.
 - `/internal/chaos` está detrás de la IP pública del Service; lo protegen el token, `CHAOS_ENABLED`, el TTL máximo, el tope de latencia y la alerta.
@@ -604,8 +604,8 @@ Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Cao
 | # | Experimento | Capa | Propietario | Donde |
 |---|---|---|---|---|
 | 1 | Identidad de maquina del coordinador (credencial usada desde un origen no previsto) | Identidad | Leonardo | este repo |
-| 2 | Exposicion y segmentacion (regla permisiva, salto este-oeste) | Red | Angel (AWS) | su repo (guia) |
-| 3 | Telemetria y capa de IA (exportador detenido, inyeccion de instrucciones) | Deteccion / IA | Juan (OCI) | su repo (guia) |
+| 2 | Exposicion y segmentacion (regla permisiva, salto este-oeste) | Red | Angel (AWS) | su repo |
+| 3 | Telemetria y capa de IA (exportador detenido, inyeccion de instrucciones) | Deteccion / IA | Juan (API de vuelos) | su repo |
 | 4 | Resiliencia de los datos del flujo (borrado, RPO/RTO) | Datos | grupal, GCP | este repo |
 
 ### Lo implementado en esta API
@@ -617,24 +617,102 @@ Sobre la misma arquitectura multinube se monta un game day de Ingenieria del Cao
 - **Contencion con aprobacion humana.** `.github/workflows/security-remediate.yml` rota el token del interruptor tras la aprobacion de un revisor (environment `produccion-seguridad`).
 - **Alerta por ausencia de senal.** Latido de telemetria de la API; si deja de escribir bitacora, se alerta.
 
-### Resultados medidos (2026-11-16, GCP)
+### Diagrama por capas: puntos de inyeccion, fronteras de confianza y telemetria
 
-| Experimento | Metrica | Ronda 0 | Ronda 1 |
+```mermaid
+flowchart TB
+  Internet(["Internet y clientes"])
+
+  subgraph GCP["Frontera de confianza GCP (Leonardo)"]
+    direction TB
+    subgraph IdG["Capa de identidad"]
+      Tok["Token efimero del interruptor<br/>(audiencia, TTL, ventana)"]
+      WI["Workload Identity<br/>medical-api -> medical-api-gsa"]
+      Honey["Honeytoken<br/>medical-api-admin-backup-key"]
+    end
+    subgraph CargaG["Capa de carga de trabajo (GKE, 2 replicas)"]
+      Coord["Coordinador /api/v5/flujo"]
+      Chaos["/internal/chaos"]
+    end
+    subgraph DatosG["Capa de datos"]
+      Bkt[("Bucket del flujo<br/>WORM 1 dia")]
+      Copia[("Copia aislada us-east1<br/>WORM 7 dias")]
+    end
+    subgraph DetG["Deteccion y respuesta"]
+      Audit["Cloud Audit Logs"]
+      Log["Cloud Logging (bitacora con traceId)"]
+      Alert["6 reglas seguridad_* y alertas"]
+      Rem["security-remediate.yml<br/>(aprobacion humana)"]
+    end
+  end
+
+  subgraph AWS["Frontera de confianza AWS (Angel)"]
+    direction TB
+    ALB["ALB publico"]
+    ECS["Tasks ECS (puerto 3000)"]
+    RDS[("RDS en subredes privadas")]
+    EB["CloudTrail -> EventBridge -> Lambda de contencion -> SNS"]
+  end
+
+  subgraph RW["Frontera de confianza API de vuelos (Juan, Railway)"]
+    direction TB
+    Vuelos["API de vuelos"]
+    Lat["Latido y alerta por ausencia de senal"]
+    Sen["Senuelo /internal/senuelo"]
+  end
+
+  Internet -->|"X-Trace-Id"| Coord
+  Internet -.->|"INYECCION exp 1: credencial desde origen no previsto"| Chaos
+  Tok --> Chaos
+  WI --> Coord
+  Coord -->|"escribe flujo/traceId.json"| Bkt
+  Bkt -.->|"respaldo del desplegador"| Copia
+  Internet -.->|"INYECCION exp 4: borrado / sobrescritura"| Bkt
+  Coord -->|"1. animal + X-Trace-Id"| ALB --> ECS --> RDS
+  Internet -.->|"INYECCION exp 2: regla 0.0.0.0/0 en ECS o RDS"| ECS
+  Coord -->|"2. vuelo + X-Trace-Id"| Vuelos
+  Vuelos -.->|"INYECCION exp 3: telemetria pausada, instruccion en un dato"| Lat
+  Chaos -->|"telemetria"| Log
+  Honey -->|"telemetria"| Audit
+  Bkt -->|"telemetria"| Audit
+  Audit --> Alert
+  Log --> Alert
+  Alert --> Rem
+  ECS -->|"telemetria"| EB
+```
+
+- **Fronteras de confianza:** cada nube es una frontera; entre ellas solo viaja HTTP con `X-Trace-Id`.
+  Dentro de GCP, la identidad de los pods (Workload Identity) es distinta de la del CI y de la del dueno.
+- **Puntos de inyeccion:** las flechas punteadas "INYECCION". Cada una corresponde a un experimento.
+- **Recoleccion de telemetria:** Cloud Audit Logs y Cloud Logging en GCP, CloudTrail y CloudWatch en AWS,
+  la bitacora del proceso en la API de vuelos. Todas llevan el trace id cuando la peticion pasa por el flujo.
+
+### Resultados medidos (rondas 0 y 1)
+
+| Exp. | Metrica | Ronda 0 | Ronda 1 |
 |---|---|---|---|
-| 1 identidad | credencial mal usada contenida | no | si (401) |
-| 1 identidad | MTTD | 4.6 s | 4.3 s |
-| 4 datos | RTO | 305 s (versiones) | 20 s (copia aislada) |
-| 4 datos | RPO | 0 | 0 |
-| 4 datos | borrado de la copia (WORM) | n/a | bloqueado (403) |
-| IA | inyecciones ejecutadas / reportadas | n/a | 0 / 3 |
+| 1 identidad (GCP) | credencial mal usada contenida | no (200) | si (401) |
+| 1 identidad (GCP) | MTTD | 4,6 s | 4,3 s |
+| 2 red (AWS) | MTTD ECS / RDS | no detectada en 600 s | 13,0 s / 14,2 s |
+| 2 red (AWS) | MTTC ECS / RDS | no contenida | 21,1 s / 13,1 s |
+| 2 red (AWS) | cobertura / contencion | 0/3 / 0/3 | 2/3 / 3/3 |
+| 3 telemetria (API de vuelos) | MTTD de la ausencia de latido | sin deteccion en 4 s | 3,06 s (T1 era 3 s) |
+| 3 telemetria (API de vuelos) | MTTC | no aplica | 0,01 s |
+| 4 datos (GCP) | RPO / RTO | 0 / 305 s (versiones) | 0 / 20 s (copia aislada) |
+| 4 datos (GCP) | destruccion de la copia / restauracion parcial | n/a | bloqueada (403) / 3 de 3 en 56,5 s |
+| IA | inyecciones ejecutadas / reportadas | n/a | 0 / 3 (y el texto real de los datos de Juan, reportado) |
+
+Falsos positivos en trafico normal: 0 en los cuatro. Evidencia: `chaos/security/results/` (exp 1, 4, IA),
+`Api_Pet_Adoption/chaos/security/results/` (exp 2) y `clic_kiusys/chaos/security/results/` (exp 3).
 
 ### Trazabilidad a marcos de referencia
 
-MITRE ATT&CK (tecnica emulada) y D3FEND (contramedida) en cada regla de `chaos/security/detecciones/`; MITRE ATLAS y OWASP LLM/Agentic 2026 en la capa de IA; ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207 (verificacion continua, minimo privilegio, microsegmentacion) en la tabla del informe (`docs/chaos/INFORME_GAMEDAY.md`, seccion 9).
+MITRE ATT&CK (tecnica emulada) y D3FEND (contramedida) en cada regla de `chaos/security/detecciones/`; MITRE ATLAS y OWASP LLM/Agentic 2026 en la capa de IA; ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207 (verificacion continua, minimo privilegio, microsegmentacion) en la tabla completa del informe (`docs/chaos/INFORME_GAMEDAY.md`, seccion 11).
 
-### Lo que falta de los compañeros
+### Estado de los compañeros
 
-Experimentos 2 (Angel, red en AWS) y 3 (Juan, telemetria e IA en OCI), con sus dos rondas, reglas de deteccion como codigo y mejoras. Guias detalladas fuera del repositorio. Lo unico que el coordinador necesita de ellos: sus APIs en linea y el `X-Trace-Id` en sus logs para correlacionar.
+Los experimentos 2 (Angel) y 3 (Juan) estan ejecutados y documentados en sus repositorios, y sus resultados
+estan integrados en el informe del grupo. Lo pendiente esta en `docs/chaos/INFORME_GAMEDAY.md`, seccion 12.
 
 ## Cómo correr en local
 

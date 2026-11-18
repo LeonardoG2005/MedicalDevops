@@ -74,8 +74,14 @@ const createMetrics = () => {
   });
   // Series exist from the first scrape, so the dashboards show 0 instead of "no data"
   for (const peer of PEERS) {
-    for (const type of FAULT_TYPES) chaosFaultActive.set({ peer, type }, 0);
+    for (const type of FAULT_TYPES) {
+      chaosFaultActive.set({ peer, type }, 0);
+      otel.chaosFaultActive.record(0, { peer, type });
+    }
     circuitState.set({ peer }, 0);
+    // Without this the OTel series only appears after the first breaker event,
+    // so the Grafana panel stays empty for the whole of round 0
+    otel.circuitBreakerState.record(0, { peer });
   }
 
   const recordNote = (request, reply, runtime) => {

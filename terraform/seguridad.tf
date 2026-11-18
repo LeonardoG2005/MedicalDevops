@@ -186,7 +186,7 @@ resource "google_monitoring_alert_policy" "seguridad" {
     }
   }
 
-  notification_channels = var.canal_notificacion_id == "" ? [] : [var.canal_notificacion_id]
+  notification_channels = local.canales_alerta
   documentation {
     mime_type = "text/markdown"
     content   = each.value.texto
@@ -210,7 +210,7 @@ resource "google_monitoring_alert_policy" "latido_telemetria" {
     }
   }
 
-  notification_channels = var.canal_notificacion_id == "" ? [] : [var.canal_notificacion_id]
+  notification_channels = local.canales_alerta
   documentation {
     mime_type = "text/markdown"
     content   = "La API no escribe bitacora desde hace mas de ${var.ventana_latido_segundos} s. O se detuvo el exportador, o los pods, o alguien trunco la bitacora. Verificar kubectl logs y el estado del PodMonitoring."
@@ -275,4 +275,61 @@ output "bucket_copia_aislada" {
 
 output "honeytoken" {
   value = google_secret_manager_secret.honeytoken.secret_id
+}
+
+# Tablero del game day de seguridad: el estado estable (todo en cero) y la
+# senal de cada regla durante un experimento, lado a lado con la ausencia de
+# latido. Mismas consultas y recursos monitoreados que las alertas.
+resource "google_monitoring_dashboard" "seguridad" {
+  dashboard_json = jsonencode({
+    displayName = "Medical API v5: game day de seguridad (detecciones)"
+    mosaicLayout = {
+      columns = 12
+      tiles = concat([
+        for i, clave in sort(keys(local.alertas)) : merge(
+          { width = 6, height = 4 },
+          i % 2 == 1 ? { xPos = 6 } : {},
+          i >= 2 ? { yPos = floor(i / 2) * 4 } : {},
+          {
+            widget = {
+              title = "Deteccion: ${replace(clave, "_", " ")} (eventos en 5 min)"
+              xyChart = {
+                dataSets = [{
+                  timeSeriesQuery = {
+                    prometheusQuery = format("sum(%s)", join(" or ", [
+                      for r in local.alertas[clave].recursos :
+                      "increase(logging_googleapis_com:user_${google_logging_metric.seguridad[clave].name}{monitored_resource=\"${r}\"}[5m])"
+                    ]))
+                  }
+                  plotType   = "LINE"
+                  targetAxis = "Y1"
+                }]
+              }
+            }
+          }
+        )
+        ], [
+        {
+          width  = 6
+          height = 4
+          yPos   = 12
+          xPos   = 6
+          widget = {
+            title = "Latido de telemetria: peticiones registradas por la API en 5 min"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  prometheusQuery = "sum(increase(logging_googleapis_com:user_${google_logging_metric.seguridad["latido_api"].name}{monitored_resource=\"k8s_container\"}[5m]))"
+                }
+                plotType   = "LINE"
+                targetAxis = "Y1"
+              }]
+            }
+          }
+        }
+      ])
+    }
+  })
+
+  depends_on = [google_project_service.required]
 }

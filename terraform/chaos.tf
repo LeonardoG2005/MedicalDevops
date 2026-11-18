@@ -74,12 +74,13 @@ locals {
   }
 
   filtro_gke = "cluster=\"${var.gke_cluster_name}\",namespace=\"${var.gke_namespace}\""
-  ruta_flujo = "/api/v5/flujo/:imagenId"
+  # Regex: el flujo tiene dos rutas (/random, usada por k6, y /:imagenId)
+  ruta_flujo = "/api/v5/flujo/.*"
 
   graficos_caos = [
     {
       titulo   = "Metrica objetivo: p95 del flujo por ronda (ms)"
-      consulta = "histogram_quantile(0.95, sum by (le, round) (rate(http_request_duration_seconds_bucket{${local.filtro_gke},route=\"${local.ruta_flujo}\"}[2m]))) * 1000"
+      consulta = "histogram_quantile(0.95, sum by (le, round) (rate(http_request_duration_seconds_bucket{${local.filtro_gke},route=~\"${local.ruta_flujo}\"}[2m]))) * 1000"
     },
     {
       titulo   = "Resultado del flujo por segundo (ok, degradado, error)"
@@ -104,13 +105,13 @@ locals {
     {
       titulo = "Tasa de error 5xx del flujo por ronda"
       consulta = join(" / ", [
-        "(sum by (round) (rate(http_requests_total{${local.filtro_gke},route=\"${local.ruta_flujo}\",status_code=~\"5..\"}[1m])) or sum by (round) (rate(http_requests_total{${local.filtro_gke},route=\"${local.ruta_flujo}\"}[1m])) * 0)",
-        "sum by (round) (rate(http_requests_total{${local.filtro_gke},route=\"${local.ruta_flujo}\"}[1m]))",
+        "(sum by (round) (rate(http_requests_total{${local.filtro_gke},route=~\"${local.ruta_flujo}\",status_code=~\"5..\"}[1m])) or sum by (round) (rate(http_requests_total{${local.filtro_gke},route=~\"${local.ruta_flujo}\"}[1m])) * 0)",
+        "sum by (round) (rate(http_requests_total{${local.filtro_gke},route=~\"${local.ruta_flujo}\"}[1m]))",
       ])
     },
     {
       titulo   = "Peticiones al flujo por segundo y por pod"
-      consulta = "sum by (pod) (rate(http_requests_total{${local.filtro_gke},route=\"${local.ruta_flujo}\"}[1m]))"
+      consulta = "sum by (pod) (rate(http_requests_total{${local.filtro_gke},route=~\"${local.ruta_flujo}\"}[1m]))"
     },
   ]
 }
@@ -170,7 +171,7 @@ resource "google_monitoring_alert_policy" "caos_fallo_olvidado" {
     }
   }
 
-  notification_channels = var.canal_notificacion_id == "" ? [] : [var.canal_notificacion_id]
+  notification_channels = local.canales_alerta
 
   documentation {
     mime_type = "text/markdown"

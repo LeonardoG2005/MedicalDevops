@@ -24,14 +24,18 @@ const HONEYTOKEN = 'medical-api-admin-backup-key';
 const UA_PRUEBA = 'gameday-identidad/1.0 (origen-no-previsto)';
 const archivo = () => `exp1-ronda-${RONDA}.json`;
 
-async function tocar(headers) {
+// Cada condicion lleva su propio trace id (gd-exp1-r<ronda>-<caso>-<sello>): la
+// misma cadena aparece como "traceId" en la linea de log que la detecta, asi un
+// tercero puede unir la prueba, la bitacora y la alerta.
+async function tocar(headers, caso = 'prueba') {
   const started = C.ahora();
+  const traceId = `gd-exp1-r${RONDA}-${caso}-${Date.now().toString(36)}`;
   try {
-    const r = await fetch(`${BASE_URL}/internal/chaos`, { headers: { accept: 'application/json', ...headers }, signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`${BASE_URL}/internal/chaos`, { headers: { accept: 'application/json', 'x-trace-id': traceId, ...headers }, signal: AbortSignal.timeout(15000) });
     const body = await r.json().catch(() => null);
-    return { t: started, status: r.status, motivo: body?.motivo || null, rechazado: r.status === 401 || r.status === 403 };
+    return { t: started, traceId, status: r.status, motivo: body?.motivo || null, rechazado: r.status === 401 || r.status === 403 };
   } catch (error) {
-    return { t: started, status: 0, motivo: error.message, rechazado: false };
+    return { t: started, traceId, status: 0, motivo: error.message, rechazado: false };
   }
 }
 
@@ -70,7 +74,7 @@ const comandos = {
       // Condicion: el secreto compartido presentado desde un origen no previsto
       // (ATT&CK T1550.001). En ronda 1 el modo efimero lo rechaza.
       bitacora.push({ t: C.ahora(), evento: 'prueba_inicio', caso: 'replay', attack: 'T1550.001' });
-      pruebas.replay = await tocar({ 'x-chaos-token': TOKEN, 'user-agent': UA_PRUEBA });
+      pruebas.replay = await tocar({ 'x-chaos-token': TOKEN, 'user-agent': UA_PRUEBA }, 'replay');
       pruebas.replay.control_contuvo = pruebas.replay.rechazado;
       bitacora.push({ t: C.ahora(), evento: 'prueba_fin', caso: 'replay', status: pruebas.replay.status, motivo: pruebas.replay.motivo });
     }
@@ -79,7 +83,7 @@ const comandos = {
       // (alcance no previsto). Debe rechazarse por audiencia en ronda 1.
       const token = TOKEN.length >= 16 ? mintToken({ key: TOKEN, audience: 'admin-backup', ttlSeconds: 300 }) : 'sin-clave';
       bitacora.push({ t: C.ahora(), evento: 'prueba_inicio', caso: 'alcance', attack: 'T1078.004' });
-      pruebas.alcance = await tocar({ 'x-chaos-token': token, 'user-agent': UA_PRUEBA });
+      pruebas.alcance = await tocar({ 'x-chaos-token': token, 'user-agent': UA_PRUEBA }, 'alcance');
       pruebas.alcance.control_contuvo = pruebas.alcance.rechazado;
       bitacora.push({ t: C.ahora(), evento: 'prueba_fin', caso: 'alcance', status: pruebas.alcance.status, motivo: pruebas.alcance.motivo });
     }

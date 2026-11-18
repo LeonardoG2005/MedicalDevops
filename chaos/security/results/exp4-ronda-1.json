@@ -26,6 +26,51 @@
       "evento": "destruccion_fin",
       "objetos_restantes": 0,
       "bloqueado_por_retencion": false
+    },
+    {
+      "t": "2026-11-17T22:44:30.514Z",
+      "evento": "restauracion_parcial_inicio",
+      "objetos": 3
+    },
+    {
+      "t": "2026-11-17T22:45:01.741Z",
+      "evento": "restauracion_parcial_fin",
+      "integros": 0
+    },
+    {
+      "t": "2026-11-17T22:45:04.888Z",
+      "evento": "intento_borrado_primario",
+      "bloqueado": false
+    },
+    {
+      "t": "2026-11-17T22:45:30.671Z",
+      "evento": "restauracion_parcial_inicio",
+      "objetos": 3
+    },
+    {
+      "t": "2026-11-17T22:46:18.934Z",
+      "evento": "restauracion_parcial_fin",
+      "integros": 3
+    },
+    {
+      "t": "2026-11-17T22:46:26.923Z",
+      "evento": "intento_borrado_primario",
+      "bloqueado": false
+    },
+    {
+      "t": "2026-11-17T22:47:31.842Z",
+      "evento": "restauracion_parcial_inicio",
+      "objetos": 3
+    },
+    {
+      "t": "2026-11-17T22:48:28.320Z",
+      "evento": "restauracion_parcial_fin",
+      "integros": 3
+    },
+    {
+      "t": "2026-11-17T22:48:50.855Z",
+      "evento": "intento_borrado_primario",
+      "dato_retenido": true
     }
   ],
   "destruccion": {
@@ -49,5 +94,43 @@
     "probado": true,
     "resultado": "HTTP 403: subject to retention policy, cannot be deleted or overwritten until 2026-11-23",
     "retencion": "7 dias en la copia aislada (us-east1)"
+  },
+  "restauracion_parcial": {
+    "inicio": "2026-11-17T22:47:31.842Z",
+    "fin": "2026-11-17T22:48:28.320Z",
+    "rto_parcial_s": 56.5,
+    "pedidos": 3,
+    "integros": 3,
+    "desde_versiones_no_actuales": true,
+    "objetos": [
+      {
+        "origen": "gs://medical-devops-400345348270-results-copia-aislada/flujo/exp4-1-mwjsz4j3-0.json#1794866217416931",
+        "destino": "gs://medical-devops-400345348270-results/restauracion-parcial/mwla90xu/exp4-1-mwjsz4j3-0.json",
+        "copiado": true,
+        "md5_origen": "7idA3veBnHIl/I/LsZxFuA==",
+        "md5_destino": "7idA3veBnHIl/I/LsZxFuA=="
+      },
+      {
+        "origen": "gs://medical-devops-400345348270-results-copia-aislada/flujo/exp4-1-mwjsz4vu-1.json#1794866218128167",
+        "destino": "gs://medical-devops-400345348270-results/restauracion-parcial/mwla90xu/exp4-1-mwjsz4vu-1.json",
+        "copiado": true,
+        "md5_origen": "JVw0hc5XvSgKZ5pHR2X18A==",
+        "md5_destino": "JVw0hc5XvSgKZ5pHR2X18A=="
+      },
+      {
+        "origen": "gs://medical-devops-400345348270-results-copia-aislada/flujo/exp4-1-mwjsz5bj-2.json#1794866217431769",
+        "destino": "gs://medical-devops-400345348270-results/restauracion-parcial/mwla90xu/exp4-1-mwjsz5bj-2.json",
+        "copiado": true,
+        "md5_origen": "opJoQ6Co5q3DLI6e1RTawA==",
+        "md5_destino": "opJoQ6Co5q3DLI6e1RTawA=="
+      }
+    ]
+  },
+  "worm_primario": {
+    "objeto": "gs://medical-devops-400345348270-results/restauracion-parcial/mwla90xu/exp4-1-mwjsz4j3-0.json",
+    "version_viva_ocultada": true,
+    "destruccion_de_la_version_bloqueada": true,
+    "dato_retenido": true,
+    "respuesta_destruccion": "ERROR: HTTPError 403: Object 'medical-devops-400345348270-results/restauracion-parcial/mwla90xu/exp4-1-mwjsz4j3-0.json' is subject to bucket's retention policy or object retention and cannot be deleted or overwritten until 2026-11-18T14:47:40.899503-08:00.\r ....................."
   }
 }
